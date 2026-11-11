@@ -23,7 +23,7 @@ app.listen(PORT, () => {
 });
 
 if (!BOT_TOKEN) {
-  console.log("Добавь BOT_TOKEN в переменные окружения.");
+  console.log("8932016049:AAFNUck_uWzJNFV5Gg9I2VInqnALdXnzlH8");
   process.exit(1);
 }
 
