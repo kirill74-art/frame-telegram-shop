@@ -3,291 +3,981 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#101018">
-<title>FRAME</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#090b14">
+<title>FRAME — Prompt Store</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
 <style>
+:root{
+  color-scheme:dark;
+  --bg:#090b14;
+  --surface:rgba(255,255,255,.065);
+  --surface2:rgba(255,255,255,.105);
+  --line:rgba(255,255,255,.11);
+  --text:#f6f7ff;
+  --muted:#9299ad;
+  --blue:#91aaff;
+  --purple:#b69aff;
+  --green:#8be3ba;
+  --shadow:0 18px 55px rgba(0,0,0,.25);
+}
+body.light{
+  color-scheme:light;
+  --bg:#f2f4fa;
+  --surface:rgba(255,255,255,.67);
+  --surface2:rgba(255,255,255,.9);
+  --line:rgba(50,60,90,.12);
+  --text:#171b2c;
+  --muted:#747b90;
+  --blue:#526fe0;
+  --purple:#9367d7;
+  --green:#238e61;
+  --shadow:0 15px 45px rgba(60,70,110,.10);
+}
 *{box-sizing:border-box}
-body{margin:0;background:#101018;color:#f5f3ff;font-family:Arial,sans-serif}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  min-height:100vh;
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:
+    radial-gradient(ellipse at 12% 0%,rgba(89,116,230,.23),transparent 38%),
+    radial-gradient(ellipse at 95% 35%,rgba(157,91,211,.16),transparent 35%),
+    var(--bg);
+  background-attachment:fixed;
+  transition:background .3s,color .3s;
+}
 button,input{font:inherit}
-header{padding:25px 20px 18px;background:linear-gradient(140deg,#302052,#141526)}
-.logo{font-size:34px;font-weight:900;letter-spacing:6px}
-.subtitle{color:#aaa5c5;font-size:12px;margin-top:7px;letter-spacing:1px}
-.balance{margin-top:20px;padding:15px;background:#ffffff12;border:1px solid #ffffff20;border-radius:14px;display:flex;justify-content:space-between}
-main{max-width:650px;margin:auto;padding:20px 18px 105px}
-h2{font-size:21px;margin:10px 0 17px}
-.search{width:100%;padding:15px;border:1px solid #39364d;border-radius:13px;background:#1d1b2b;color:white;outline:none;margin-bottom:18px}
-.categories{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.category{padding:17px 13px;min-height:120px;border:1px solid #45405d;border-radius:17px;background:linear-gradient(145deg,#29243f,#1a1929);color:white;text-align:left;cursor:pointer}
-.category strong{display:block;margin-top:12px;font-size:14px}
-.category small{display:block;color:#aaa;margin-top:6px}
-.emoji{font-size:25px}
-.item{padding:17px;margin:12px 0;background:#211e32;border:1px solid #343047;border-radius:15px}
-.item h3{font-size:16px;margin:0 0 9px}
-.item p{font-size:13px;line-height:1.6;color:#b5b0ca}
-.action{padding:12px 17px;border:0;border-radius:10px;background:linear-gradient(100deg,#8062ed,#568af5);color:white;font-weight:bold;cursor:pointer}
-.secondary{background:#37334c}
-.page{display:none}
-.page.active{display:block}
-.nav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;padding:13px 4px calc(13px + env(safe-area-inset-bottom));background:#191725;border-top:1px solid #302e42;z-index:10}
-.nav button{background:none;border:0;color:#aaa5bd;font-size:12px;cursor:pointer}
-.nav button.active{color:#a98aff}
-.empty{color:#aaa5bd;font-size:14px;line-height:1.5}
-.tag{font-size:11px;color:#b6a2ff}
-.row{display:flex;gap:9px;flex-wrap:wrap}
+button{color:inherit;cursor:pointer}
+button:active{transform:scale(.975)}
+[hidden]{display:none!important}
+
+.app{
+  width:min(100%,650px);
+  margin:auto;
+  padding:20px 17px 115px;
+}
+.glass{
+  background:linear-gradient(135deg,var(--surface2),var(--surface));
+  border:1px solid var(--line);
+  box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.07);
+  backdrop-filter:blur(26px) saturate(160%);
+  -webkit-backdrop-filter:blur(26px) saturate(160%);
+}
+.top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:25px;
+}
+.brand{
+  font-size:27px;
+  font-weight:950;
+  letter-spacing:5px;
+}
+.brand span{
+  background:linear-gradient(120deg,#a7bdff,#c19aff);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+.top-actions{display:flex;gap:9px}
+.icon-btn{
+  width:43px;height:43px;
+  border-radius:15px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  font-size:19px;
+}
+.hero{
+  position:relative;
+  overflow:hidden;
+  padding:25px;
+  border-radius:29px;
+  margin-bottom:25px;
+  isolation:isolate;
+}
+.hero:before{
+  content:"";
+  position:absolute;
+  width:220px;height:220px;
+  border-radius:50%;
+  right:-90px;top:-115px;
+  background:rgba(133,160,255,.27);
+  filter:blur(35px);
+  z-index:-1;
+}
+.hero:after{
+  content:"";
+  position:absolute;
+  width:130px;height:130px;
+  border-radius:50%;
+  right:35px;bottom:-100px;
+  background:rgba(181,133,255,.2);
+  filter:blur(35px);
+  z-index:-1;
+}
+.eyebrow{
+  color:var(--blue);
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:2.4px;
+}
+.hero h1{
+  font-size:clamp(28px,7vw,37px);
+  line-height:1.08;
+  letter-spacing:-1.3px;
+  margin:14px 0 11px;
+  max-width:360px;
+}
+.sub{
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.55;
+  max-width:340px;
+}
+.balance{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:12px 16px;
+  margin-top:21px;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:var(--surface2);
+  font-size:14px;
+  font-weight:800;
+}
+.gem{
+  font-size:20px;
+  color:#a9c5ff;
+  text-shadow:0 0 17px #86a8ff;
+}
+.section-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin:26px 2px 14px;
+}
+.section-head h2{
+  margin:0;
+  font-size:19px;
+  letter-spacing:-.4px;
+}
+.small{color:var(--muted);font-size:11px}
+.categories{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:11px;
+}
+.category{
+  position:relative;
+  min-height:123px;
+  padding:16px;
+  text-align:left;
+  border-radius:22px;
+  overflow:hidden;
+  transition:.22s;
+}
+.category.active{
+  border-color:rgba(145,170,255,.65);
+  background:linear-gradient(145deg,rgba(115,144,255,.23),var(--surface));
+  box-shadow:0 8px 30px rgba(105,130,255,.12);
+}
+.category .emoji{
+  display:block;
+  font-size:25px;
+  margin-bottom:12px;
+}
+.category strong{
+  display:block;
+  font-size:13px;
+  line-height:1.35;
+}
+.category small{
+  display:block;
+  color:var(--muted);
+  margin-top:6px;
+  font-size:10px;
+}
+.search{
+  height:52px;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  padding:0 16px;
+  border-radius:17px;
+  margin-bottom:14px;
+}
+.search span{font-size:23px;color:var(--muted)}
+.search input{
+  flex:1;
+  width:100%;
+  min-width:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--text);
+  font-size:14px;
+}
+.search input::placeholder{color:var(--muted)}
+.filters{
+  display:flex;
+  gap:8px;
+  overflow:auto;
+  padding:2px 0 10px;
+  scrollbar-width:none;
+}
+.filters::-webkit-scrollbar{display:none}
+.chip{
+  flex-shrink:0;
+  padding:9px 14px;
+  border-radius:30px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--muted);
+  font-size:11px;
+}
+.chip.active{
+  background:rgba(125,151,255,.2);
+  border-color:rgba(145,170,255,.5);
+  color:var(--text);
+}
+.prompt-list{display:grid;gap:11px}
+.prompt{
+  width:100%;
+  padding:17px;
+  text-align:left;
+  border-radius:21px;
+  transition:.2s;
+}
+.prompt-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+}
+.prompt-title{
+  font-size:14px;
+  line-height:1.4;
+  font-weight:800;
+}
+.tag{
+  flex-shrink:0;
+  padding:6px 9px;
+  border-radius:20px;
+  background:rgba(145,170,255,.13);
+  color:var(--blue);
+  font-size:9px;
+  font-weight:800;
+}
+.tag.free{
+  color:var(--green);
+  background:rgba(75,195,140,.12);
+}
+.prompt-desc{
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+  margin-top:10px;
+}
+.prompt-bottom{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:14px;
+}
+.price{
+  font-size:11px;
+  color:var(--blue);
+  font-weight:800;
+}
+.open-label{font-size:11px;color:var(--muted)}
+.empty{
+  text-align:center;
+  padding:35px 16px;
+  border-radius:20px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.6;
+}
+.loading{
+  text-align:center;
+  padding:28px;
+  color:var(--muted);
+  font-size:13px;
+}
+.profile-card{
+  padding:20px;
+  border-radius:23px;
+  margin-bottom:12px;
+}
+.profile-avatar{
+  width:62px;height:62px;
+  display:grid;
+  place-items:center;
+  border-radius:21px;
+  background:linear-gradient(135deg,rgba(145,170,255,.25),rgba(181,154,255,.2));
+  font-size:29px;
+  margin-bottom:14px;
+}
+.profile-name{font-size:19px;font-weight:850}
+.profile-line{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:14px 0;
+  border-bottom:1px solid var(--line);
+  font-size:13px;
+}
+.profile-line:last-child{border:0}
+.action{
+  width:100%;
+  border:0;
+  border-radius:16px;
+  padding:15px;
+  margin-top:10px;
+  color:#111526;
+  background:linear-gradient(110deg,#91adff,#c0a0f5);
+  font-weight:850;
+  font-size:13px;
+  box-shadow:0 7px 24px rgba(130,145,255,.17);
+}
+.action.secondary{
+  color:var(--text);
+  background:var(--surface2);
+  border:1px solid var(--line);
+  box-shadow:none;
+}
+.action.danger{
+  color:white;
+  background:linear-gradient(110deg,#d96b83,#a94d73);
+}
+.bottom-nav{
+  position:fixed;
+  z-index:5;
+  bottom:12px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(calc(100% - 24px),570px);
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  padding:9px;
+  border-radius:23px;
+  background:rgba(22,25,42,.86);
+  border:1px solid rgba(255,255,255,.14);
+  backdrop-filter:blur(28px);
+  -webkit-backdrop-filter:blur(28px);
+  box-shadow:0 12px 40px #0006;
+}
+body.light .bottom-nav{background:rgba(255,255,255,.87)}
+.nav-btn{
+  border:0;
+  background:transparent;
+  color:#9298ad;
+  padding:7px 2px;
+  font-size:10px;
+}
+.nav-btn span{
+  display:block;
+  font-size:20px;
+  margin-bottom:4px;
+}
+.nav-btn.active{color:#aebfff}
+body.light .nav-btn.active{color:#526fe0}
+.modal-bg{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:10;
+  background:rgba(0,0,0,.68);
+  backdrop-filter:blur(9px);
+  padding:14px;
+  align-items:flex-end;
+  justify-content:center;
+}
+.modal-bg.show{display:flex}
+.modal{
+  width:min(100%,560px);
+  max-height:88vh;
+  overflow:auto;
+  padding:22px;
+  border-radius:27px;
+  background:linear-gradient(145deg,#242941,#111522);
+  border:1px solid rgba(255,255,255,.17);
+  box-shadow:0 20px 70px #0009;
+  animation:slideUp .25s ease;
+}
+body.light .modal{
+  background:linear-gradient(145deg,#fff,#edf0fa);
+  border-color:var(--line);
+}
+@keyframes slideUp{
+  from{transform:translateY(25px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+.modal-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:9px;
+}
+.modal h2{font-size:20px;margin:0}
+.close{
+  flex-shrink:0;
+  border:0;
+  background:var(--surface2);
+  border-radius:12px;
+  width:37px;height:37px;
+  font-size:21px;
+}
+.prompt-text{
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  color:var(--text);
+  font-size:13px;
+  line-height:1.7;
+  margin:19px 0;
+}
+.confirm-box{
+  padding:15px;
+  margin:17px 0;
+  border-radius:17px;
+  background:rgba(145,170,255,.1);
+  border:1px solid rgba(145,170,255,.2);
+  font-size:13px;
+  line-height:1.6;
+}
+.toast{
+  position:fixed;
+  z-index:20;
+  bottom:100px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#252b40;
+  color:white;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:14px;
+  padding:12px 17px;
+  font-size:12px;
+  display:none;
+  max-width:90%;
+  text-align:center;
+}
+.toast.show{display:block}
+@media(min-width:520px){
+  .app{padding-top:30px}
+  .hero{padding:32px}
+}
 </style>
 </head>
-<body>
 
-<header>
- <div class="logo">FRAME</div>
- <div class="subtitle">ТВОИ ИСТОРИИ. ТВОЁ ВООБРАЖЕНИЕ.</div>
- <div class="balance">
-  <span>💎 Мои кристаллы</span>
-  <strong id="balance">5</strong>
- </div>
+<body>
+<div class="app">
+
+<header class="top">
+  <div class="brand">FR<span>A</span>ME</div>
+  <div class="top-actions">
+    <button class="icon-btn" onclick="toggleTheme()" aria-label="Сменить тему">☼</button>
+    <button class="icon-btn" onclick="showPage('profile')" aria-label="Профиль">◉</button>
+  </div>
 </header>
 
-<main>
+<main id="homePage">
 
-<section class="page active" id="home">
- <h2>Открой свою историю</h2>
- <input class="search" id="search" placeholder="🔎 Поиск историй..." oninput="renderCatalog()">
- <div class="categories">
-  <button class="category" onclick="openCategory('horror')">
-   <span class="emoji">🌑</span>
-   <strong>Страшные истории</strong>
-   <small>99 историй</small>
+<section class="hero glass">
+  <div class="eyebrow">FRAME PROMPT STORE</div>
+  <h1>Идеи, которые<br>оживают с ИИ.</h1>
+  <div class="sub">Коллекция готовых промптов для создания историй, видео и необычных миров.</div>
+  <div class="balance">
+    <span class="gem">◆</span>
+    <span id="balance">—</span>
+    <span class="small">кристаллов</span>
+  </div>
+</section>
+
+<div class="section-head">
+  <h2>Коллекции</h2>
+  <span class="small">04 категории</span>
+</div>
+
+<section class="categories" id="categories">
+  <button class="category glass active" data-category="Страшные истории" onclick="selectCategory('Страшные истории')">
+    <span class="emoji">🌑</span>
+    <strong>Страшные истории</strong>
+    <small>99 промптов</small>
   </button>
-  <button class="category" onclick="openCategory('imagine')">
-   <span class="emoji">🌌</span>
-   <strong>Представь, если…</strong>
-   <small>99 историй</small>
+  <button class="category glass" data-category="Представь, если…" onclick="selectCategory('Представь, если…')">
+    <span class="emoji">🌌</span>
+    <strong>Представь, если…</strong>
+    <small>99 промптов</small>
   </button>
-  <button class="category" onclick="openCategory('rules')">
-   <span class="emoji">🌙</span>
-   <strong>Ночные правила</strong>
-   <small>99 историй</small>
+  <button class="category glass" data-category="Ночные правила" onclick="selectCategory('Ночные правила')">
+    <span class="emoji">🌙</span>
+    <strong>Ночные правила</strong>
+    <small>99 промптов</small>
   </button>
-  <button class="category" onclick="openCategory('mystery')">
-   <span class="emoji">🔐</span>
-   <strong>Тайны и загадки</strong>
-   <small>99 историй</small>
+  <button class="category glass" data-category="Тайны и загадки" onclick="selectCategory('Тайны и загадки')">
+    <span class="emoji">🔐</span>
+    <strong>Тайны и загадки</strong>
+    <small>99 промптов</small>
   </button>
- </div>
- <div style="margin-top:28px">
-  <h2>Популярное</h2>
-  <div id="popular"></div>
- </div>
 </section>
 
-<section class="page" id="catalog">
- <button class="action secondary" onclick="showPage('home')">← Назад</button>
- <h2 id="categoryTitle" style="margin-top:22px">Истории</h2>
- <div id="catalogItems"></div>
-</section>
+<div class="section-head">
+  <h2 id="listTitle">Страшные истории</h2>
+  <span class="small" id="count">Загрузка…</span>
+</div>
 
-<section class="page" id="details">
- <button class="action secondary" onclick="showPage('catalog')">← Назад</button>
- <div id="detailContent" style="margin-top:22px"></div>
-</section>
+<label class="search glass">
+  <span>⌕</span>
+  <input id="searchInput" type="search" placeholder="Поиск по коллекции..." oninput="loadPrompts()">
+</label>
 
-<section class="page" id="favorites">
- <h2>♡ Избранное</h2>
- <div id="favoriteItems"></div>
-</section>
+<div class="filters">
+  <button class="chip active" onclick="setFilter('all',this)">Все</button>
+  <button class="chip" onclick="setFilter('free',this)">Бесплатные</button>
+  <button class="chip" onclick="setFilter('paid',this)">Платные</button>
+</div>
 
-<section class="page" id="shop">
- <h2>💎 Магазин кристаллов</h2>
- <p class="empty">Демонстрационный магазин. Реальную оплату подключим отдельно.</p>
- <div class="item">
-  <h3>10 кристаллов</h3>
-  <p>Тестовое начисление</p>
-  <button class="action" onclick="addCrystals(10)">Получить +10</button>
- </div>
- <div class="item">
-  <h3>50 кристаллов</h3>
-  <p>Тестовое начисление</p>
-  <button class="action" onclick="addCrystals(50)">Получить +50</button>
- </div>
- <div class="item">
-  <h3>100 кристаллов</h3>
-  <p>Тестовое начисление</p>
-  <button class="action" onclick="addCrystals(100)">Получить +100</button>
- </div>
+<section class="prompt-list" id="promptList">
+  <div class="loading">Загружаем коллекцию…</div>
 </section>
-
-<section class="page" id="profile">
- <h2>👤 Профиль</h2>
- <div class="item">💎 Баланс: <strong id="profileBalance">5</strong></div>
- <div class="item">📖 Открыто историй: <strong id="openedCount">0</strong></div>
- <div class="item">♡ Избранное: <strong id="favoriteCount">0</strong></div>
- <div class="item">
-  <h3>FRAME</h3>
-  <p>Твоя библиотека идей для видео.</p>
-  <span class="tag">VERSION 1.0 DEMO</span>
- </div>
-</section>
-
 </main>
 
-<nav class="nav">
- <button class="active" onclick="showPage('home',this)">⌂<br>Главная</button>
- <button onclick="showPage('favorites',this)">♡<br>Избранное</button>
- <button onclick="showPage('shop',this)">💎<br>Магазин</button>
- <button onclick="showPage('profile',this)">♙<br>Профиль</button>
+<main id="favoritesPage" hidden>
+  <div class="section-head"><h2>Избранное</h2></div>
+  <p class="small">Твои сохранённые идеи</p>
+  <section class="prompt-list" id="favoritesList"></section>
+</main>
+
+<main id="profilePage" hidden>
+  <div class="section-head"><h2>Мой профиль</h2></div>
+
+  <section class="profile-card glass">
+    <div class="profile-avatar">👤</div>
+    <div class="profile-name" id="profileName">Пользователь FRAME</div>
+    <div class="small" id="profileUsername">Аккаунт Telegram</div>
+  </section>
+
+  <section class="profile-card glass">
+    <div class="profile-line">
+      <span>Баланс</span>
+      <strong id="profileBalance">— ◆</strong>
+    </div>
+    <div class="profile-line">
+      <span>Открытые промпты</span>
+      <strong id="unlockedCount">—</strong>
+    </div>
+    <div class="profile-line">
+      <span>Статус</span>
+      <strong>Участник FRAME</strong>
+    </div>
+  </section>
+
+  <section class="profile-card glass">
+    <h3 style="margin-top:0">💎 Кристаллы</h3>
+    <p class="small">Пополнение баланса через Telegram Stars.</p>
+    <button class="action" onclick="toast('Платёжный модуль подключим отдельно')">Пополнить баланс</button>
+  </section>
+</main>
+
+<main id="historyPage" hidden>
+  <div class="section-head"><h2>Мои открытия</h2></div>
+  <section class="profile-card glass">
+    <div style="font-size:28px;margin-bottom:12px">📚</div>
+    <strong>История промптов</strong>
+    <p class="small">Здесь будут отображаться открытые тобой промпты. Для отображения истории потребуется отдельный API-метод на сервере.</p>
+  </section>
+</main>
+
+</div>
+
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="showPage('home')"><span>⌂</span>Главная</button>
+  <button class="nav-btn" onclick="showPage('favorites')"><span>♡</span>Избранное</button>
+  <button class="nav-btn" onclick="showPage('history')"><span>▤</span>Открытия</button>
+  <button class="nav-btn" onclick="showPage('profile')"><span>◉</span>Профиль</button>
 </nav>
 
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <section class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Промпт</h2>
+      <button class="close" onclick="closeModal()">×</button>
+    </div>
+    <div class="small" id="modalMeta"></div>
+    <div class="prompt-text" id="modalText"></div>
+    <div id="purchaseBox" hidden>
+      <div class="confirm-box" id="purchaseInfo"></div>
+      <button class="action" id="confirmPurchaseButton" onclick="confirmPurchase()">Подтвердить покупку</button>
+    </div>
+    <button class="action" id="copyButton" onclick="copyPrompt()" hidden>Скопировать промпт</button>
+    <button class="action secondary" id="favoriteButton" onclick="toggleFavorite()">♡ В избранное</button>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
-const categories={
- horror:{title:"🌑 Страшные истории",items:[
- ["Последний автобус","Ты садишься в последний автобус. Водитель предупреждает: после третьей остановки не смотри в заднее окно."],
- ["Квартира напротив","Каждую ночь в пустой квартире напротив загорается свет. Сегодня в окне появился силуэт, похожий на тебя."],
- ["Забытый звонок","На телефоне появляется пропущенный звонок с твоего номера. Время звонка — через десять минут."],
- ["Лишний пассажир","В вагоне метро ты замечаешь человека, который повторяет каждое твоё движение. Но его отражение не двигается."],
- ["Комната без окон","Ты снимаешь дешёвую квартиру. В первую ночь обнаруживаешь дверь, которой раньше не было."]
- ]},
- imagine:{title:"🌌 Представь, если…",items:[
- ["Если бы исчезла ночь","Однажды солнце перестало заходить за горизонт. Сначала люди радовались, но вскоре заметили странные изменения."],
- ["Если бы все слышали мысли","Утром каждый человек начал слышать мысли окружающих. Но один голос звучал из пустой комнаты."],
- ["Если бы время остановилось","Весь город замер ровно на одну минуту. Кроме одного человека."],
- ["Если бы исчез интернет","В один момент интернет исчез во всём мире. Через час на всех выключенных экранах появилось одно сообщение."],
- ["Если бы люди не спали","Учёные нашли способ полностью убрать сон. Но через неделю люди начали видеть одинаковые сны."]
- ]},
- rules:{title:"🌙 Ночные правила",items:[
- ["Не отвечай после полуночи","Если в 00:17 кто-то постучит три раза, не отвечай. Даже если голос за дверью будет твоим."],
- ["Правила ночного магазина","Если покупатель войдёт без тени, не смотри ему в глаза и не пробивай его покупку."],
- ["Не включай свет в коридоре","Если ночью свет в коридоре включился сам, дождись, пока шаги уйдут."],
- ["Последняя смена","Если камера покажет тебя в комнате, в которой ты сейчас находишься, немедленно покинь здание."],
- ["Не смотри в зеркало","После двух часов ночи зеркало может показать комнату, которой нет."]
- ]},
- mystery:{title:"🔐 Тайны и загадки",items:[
- ["Комната 404","В старом отеле нет комнаты 404. Но каждый вечер из-за этой двери слышно, как кто-то просит помощи."],
- ["Письмо без адреса","В почтовом ящике появляется письмо без имени отправителя. Внутри написано то, что произойдёт завтра."],
- ["Город на карте","Ты находишь старую карту своего города. На ней отмечена улица, которой не существует."],
- ["Чужая фотография","В старом фотоальбоме появляется снимок твоего дома. На фотографии ты стоишь у окна."],
- ["Исчезнувший этаж","В документах здания указано двенадцать этажей, но все жители утверждают, что их одиннадцать."]
- ]}
-};
+const tg=window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();}
 
-let balance=Number(localStorage.getItem('frameBalance')??5);
-let favorites=JSON.parse(localStorage.getItem('frameFavorites')||'[]');
-let opened=JSON.parse(localStorage.getItem('frameOpened')||'[]');
-let currentCategory='horror';
-let currentItem=null;
-let freeUsed=localStorage.getItem('frameFreeUsed')==='true';
+const API="";
+const initData=tg?.initData||"";
 
-function save(){
- localStorage.setItem('frameBalance',balance);
- localStorage.setItem('frameFavorites',JSON.stringify(favorites));
- localStorage.setItem('frameOpened',JSON.stringify(opened));
- updateProfile();
+let currentCategory="Страшные истории";
+let currentFilter="all";
+let currentPrompt=null;
+let prompts=[];
+let favorites=[];
+let user=null;
+let crystalBalance=0;
+let purchasePending=false;
+let toastTimer;
+
+function headers(){
+  return {
+    "Content-Type":"application/json",
+    "X-Telegram-Init-Data":initData
+  };
 }
-function updateProfile(){
- document.getElementById('balance').textContent=balance;
- document.getElementById('profileBalance').textContent=balance;
- document.getElementById('openedCount').textContent=opened.length;
- document.getElementById('favoriteCount').textContent=favorites.length;
-}
-function showPage(id,button){
- document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
- document.getElementById(id).classList.add('active');
- document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
- if(button)button.classList.add('active');
- if(id==='favorites')renderFavorites();
- if(id==='profile')updateProfile();
-}
-function openCategory(name){
- currentCategory=name;
- document.getElementById('search').value='';
- document.getElementById('categoryTitle').textContent=categories[name].title;
- showPage('catalog');
- renderCatalog();
-}
-function renderCatalog(){
- let query=document.getElementById('search').value.toLowerCase();
- let html='';
- Object.keys(categories).forEach(cat=>{
-  categories[cat].items.forEach((item,index)=>{
-   if(query && !(item[0]+' '+item[1]).toLowerCase().includes(query))return;
-   if(!query && cat!==currentCategory)return;
-   html+=itemCard(cat,index,item);
+
+async function api(path,options={}){
+  const response=await fetch(API+path,{
+    ...options,
+    headers:{...headers(),...(options.headers||{})}
   });
- });
- document.getElementById('catalogItems').innerHTML=html||'<p class="empty">Ничего не найдено.</p>';
- if(query)showPage('catalog');
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.error||data.message||"Ошибка сервера");
+  return data;
 }
-function itemCard(cat,index,item){
- return `<div class="item">
- <h3>${escapeHTML(item[0])}</h3>
- <p>${escapeHTML(item[1])}</p>
- <span class="tag">💎 1 кристалл</span><br><br>
- <button class="action" onclick="openItem('${cat}',${index})">Открыть промпт</button>
- </div>`;
+
+function toast(message){
+  const el=document.getElementById("toast");
+  el.textContent=message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove("show"),2600);
 }
-function escapeHTML(s){
- return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toggleTheme(){
+  document.body.classList.toggle("light");
+  const light=document.body.classList.contains("light");
+  try{localStorage.setItem("frame-theme",light?"light":"dark");}catch{}
+  document.querySelector('meta[name="theme-color"]').content=light?"#f2f4fa":"#090b14";
 }
-function openItem(cat,index){
- currentCategory=cat;
- currentItem=index;
- let item=categories[cat].items[index];
- let key=cat+'-'+index;
- let already=opened.includes(key);
- document.getElementById('detailContent').innerHTML=`
- <div class="item">
- <span class="tag">${categories[cat].title}</span>
- <h2>${escapeHTML(item[0])}</h2>
- <p>${escapeHTML(item[1])}</p>
- <p class="empty">Это краткая идея сюжета. Полный видеопромпт появится в следующем наполнении каталога.</p>
- <div class="row">
- <button class="action" onclick="unlockItem('${key}')">${already?'Уже открыто':'Открыть за 1 💎'}</button>
- <button class="action secondary" onclick="toggleFavorite('${key}')">♡ Избранное</button>
- </div>
- </div>`;
- showPage('details');
+
+try{
+  if(localStorage.getItem("frame-theme")==="light"){
+    document.body.classList.add("light");
+    document.querySelector('meta[name="theme-color"]').content="#f2f4fa";
+  }
+}catch{}
+
+function showPage(page){
+  ["home","favorites","profile","history"].forEach(name=>{
+    document.getElementById(name+"Page").hidden=name!==page;
+  });
+  document.querySelectorAll(".nav-btn").forEach((el,i)=>{
+    el.classList.toggle("active",["home","favorites","history","profile"][i]===page);
+  });
+  if(page==="favorites")loadFavorites();
+  if(page==="profile")loadProfile();
 }
-function unlockItem(key){
- if(opened.includes(key)){
-  alert('Эта история уже открыта.');
-  return;
- }
- if(!freeUsed){
-  freeUsed=true;
-  localStorage.setItem('frameFreeUsed','true');
- }else{
-  if(balance<1){alert('Недостаточно кристаллов! Зайди в магазин.');return;}
-  balance--;
- }
- opened.push(key);
- save();
- alert('История открыта!');
- openItem(currentCategory,currentItem);
+
+function selectCategory(category){
+  currentCategory=category;
+  document.querySelectorAll(".category").forEach(el=>{
+    el.classList.toggle("active",el.dataset.category===category);
+  });
+  document.getElementById("listTitle").textContent=category;
+  loadPrompts();
 }
-function toggleFavorite(key){
- if(favorites.includes(key))favorites=favorites.filter(x=>x!==key);
- else favorites.push(key);
- save();
- alert('Избранное обновлено.');
+
+function setFilter(filter,button){
+  currentFilter=filter;
+  document.querySelectorAll(".chip").forEach(el=>el.classList.remove("active"));
+  button.classList.add("active");
+  loadPrompts();
 }
-function renderFavorites(){
- let html='';
- favorites.forEach(key=>{
-  let [cat,index]=key.split('-');
-  let item=categories[cat]?.items[Number(index)];
-  if(item)html+=`<div class="item"><h3>${escapeHTML(item[0])}</h3><button class="action" onclick="openItem('${cat}',${index})">Посмотреть</button></div>`;
- });
- document.getElementById('favoriteItems').innerHTML=html||'<p class="empty">Здесь пока ничего нет.</p>';
+
+function unwrap(data,key){
+  if(Array.isArray(data))return data;
+  return data?.[key]||data?.items||data?.data||[];
 }
-function addCrystals(amount){
- balance+=amount;
- save();
- alert('Начислено '+amount+' кристаллов!');
+
+function isFree(item){
+  return item.is_free===true||item.free===true||Number(item.price||0)===0;
 }
-document.getElementById('popular').innerHTML=
- itemCard('horror',0,categories.horror.items[0])+
- itemCard('mystery',0,categories.mystery.items[0]);
-updateProfile();
+
+function escapeHTML(value){
+  return String(value).replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+function renderPrompts(items,targetId="promptList"){
+  const target=document.getElementById(targetId);
+  if(!items.length){
+    target.innerHTML='<div class="empty glass">Здесь пока нет промптов.<br>Попробуй другую категорию или поиск.</div>';
+    return;
+  }
+
+  target.innerHTML=items.map(item=>{
+    const free=isFree(item);
+    const id=Number(item.id);
+    const title=escapeHTML(item.title||"Без названия");
+    const description=escapeHTML(item.description||item.short_description||"Подробный промпт для создания видео");
+    const price=Number(item.price||1);
+
+    return `
+      <button class="prompt glass" onclick="openPrompt(${id})">
+        <div class="prompt-top">
+          <span class="prompt-title">${title}</span>
+          <span class="tag ${free?"free":""}">${free?"БЕСПЛАТНО":"◆ "+price}</span>
+        </div>
+        <div class="prompt-desc">${description}</div>
+        <div class="prompt-bottom">
+          <span class="price">${free?"Бесплатно":price+" ◆"}</span>
+          <span class="open-label">Подробнее →</span>
+        </div>
+      </button>`;
+  }).join("");
+}
+
+let searchTimer;
+function loadPrompts(){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(fetchPrompts,250);
+}
+
+async function fetchPrompts(){
+  const target=document.getElementById("promptList");
+  target.innerHTML='<div class="loading">Загружаем коллекцию…</div>';
+  const search=document.getElementById("searchInput").value.trim();
+
+  try{
+    const params=new URLSearchParams({category:currentCategory});
+    if(search)params.set("search",search);
+
+    const data=await api("/api/prompts?"+params.toString());
+    prompts=unwrap(data,"prompts");
+
+    if(currentFilter==="free")prompts=prompts.filter(isFree);
+    if(currentFilter==="paid")prompts=prompts.filter(item=>!isFree(item));
+
+    document.getElementById("count").textContent=prompts.length+" промптов";
+    renderPrompts(prompts);
+  }catch(error){
+    target.innerHTML='<div class="empty glass">Не удалось загрузить коллекцию.<br>Проверь подключение сервера.</div>';
+    document.getElementById("count").textContent="Нет связи";
+  }
+}
+
+function setModalButtons({copy=false,purchase=false}={}){
+  document.getElementById("copyButton").hidden=!copy;
+  document.getElementById("purchaseBox").hidden=!purchase;
+}
+
+async function openPrompt(id){
+  currentPrompt=prompts.find(item=>Number(item.id)===id)||
+    favorites.find(item=>Number(item.id)===id)||{id};
+
+  purchasePending=false;
+  document.getElementById("modalTitle").textContent=currentPrompt.title||"Промпт";
+  document.getElementById("modalMeta").textContent="Загружаем доступ…";
+  document.getElementById("modalText").textContent="Загрузка…";
+  document.getElementById("purchaseBox").hidden=true;
+  document.getElementById("copyButton").hidden=true;
+  document.getElementById("favoriteButton").hidden=false;
+  document.getElementById("modalBg").classList.add("show");
+
+  const favoriteExists=favorites.some(item=>Number(item.id)===id);
+  document.getElementById("favoriteButton").textContent=
+    favoriteExists?"♥ В избранном":"♡ В избранное";
+
+  try{
+    const data=await api("/api/prompts/"+id);
+    const prompt=data.prompt||data;
+
+    if(prompt.full_prompt||prompt.text||prompt.content){
+      showOpenedPrompt(prompt,data);
+      return;
+    }
+
+    if(prompt.locked||data.locked||(!isFree(prompt)&&!prompt.full_prompt)){
+      showPurchaseConfirmation(prompt);
+      return;
+    }
+
+    showPurchaseConfirmation(prompt);
+  }catch(error){
+    document.getElementById("modalText").textContent=error.message||"Не удалось загрузить промпт.";
+    document.getElementById("modalMeta").textContent="Ошибка";
+  }
+}
+
+function showOpenedPrompt(prompt,data={}){
+  const full=prompt.full_prompt||prompt.text||prompt.content;
+  if(!full){
+    showPurchaseConfirmation(prompt);
+    return;
+  }
+
+  currentPrompt={...currentPrompt,...prompt,full_prompt:full};
+  document.getElementById("modalText").textContent=full;
+  document.getElementById("modalMeta").textContent=
+    isFree(currentPrompt)?"Бесплатный промпт":"Доступ открыт";
+  setModalButtons({copy:true});
+
+  if(data.balance!==undefined)updateBalance(data.balance);
+}
+
+function showPurchaseConfirmation(prompt){
+  currentPrompt={...currentPrompt,...prompt};
+  const price=Number(prompt.price||currentPrompt.price||1);
+
+  document.getElementById("modalText").textContent=
+    "Этот промпт пока закрыт. Чтобы увидеть полный текст, подтверди покупку.";
+  document.getElementById("modalMeta").textContent="Платный доступ";
+  document.getElementById("purchaseInfo").textContent=
+    "Стоимость: "+price+" ◆. Текущий баланс: "+crystalBalance+" ◆. Кристаллы будут списаны только после твоего подтверждения.";
+  document.getElementById("confirmPurchaseButton").textContent=
+    "Купить за "+price+" ◆";
+  document.getElementById("confirmPurchaseButton").disabled=false;
+  document.getElementById("purchaseBox").hidden=false;
+  document.getElementById("copyButton").hidden=true;
+}
+
+async function confirmPurchase(){
+  if(purchasePending||!currentPrompt?.id)return;
+
+  purchasePending=true;
+  const button=document.getElementById("confirmPurchaseButton");
+  button.disabled=true;
+  button.textContent="Покупаем…";
+
+  try{
+    const data=await api("/api/prompts/"+currentPrompt.id+"/unlock",{method:"POST"});
+    const prompt=data.prompt||data;
+    showOpenedPrompt(prompt,data);
+
+    if(data.balance!==undefined)updateBalance(data.balance);
+    else await loadProfile();
+
+    toast("Промпт открыт!");
+  }catch(error){
+    document.getElementById("purchaseInfo").textContent=
+      error.message||"Не удалось выполнить покупку.";
+    button.textContent="Повторить покупку";
+    button.disabled=false;
+  }finally{
+    purchasePending=false;
+  }
+}
+
+function closeModal(){
+  if(purchasePending)return;
+  document.getElementById("modalBg").classList.remove("show");
+}
+
+async function copyPrompt(){
+  const text=currentPrompt?.full_prompt;
+  if(!text)return;
+
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("Промпт скопирован");
+  }catch{
+    const area=document.createElement("textarea");
+    area.value=text;
+    document.body.appendChild(area);
+    area.select();
+    try{
+      document.execCommand("copy");
+      toast("Промпт скопирован");
+    }catch{
+      toast("Не удалось скопировать текст");
+    }
+    area.remove();
+  }
+}
+
+async function toggleFavorite(){
+  if(!currentPrompt?.id)return;
+  const id=currentPrompt.id;
+  const exists=favorites.some(item=>Number(item.id)===Number(id));
+
+  try{
+    if(exists){
+      await api("/api/favorites/"+id,{method:"DELETE"});
+      favorites=favorites.filter(item=>Number(item.id)!==Number(id));
+      toast("Удалено из избранного");
+    }else{
+      await api("/api/favorites/"+id,{method:"POST"});
+      favorites.push(currentPrompt);
+      toast("Добавлено в избранное");
+    }
+
+    document.getElementById("favoriteButton").textContent=
+      exists?"♡ В избранное":"♥ В избранном";
+  }catch(error){
+    toast(error.message||"Не удалось изменить избранное");
+  }
+}
+
+async function loadFavorites(){
+  const target=document.getElementById("favoritesList");
+  target.innerHTML='<div class="loading">Загружаем избранное…</div>';
+
+  try{
+    const data=await api("/api/favorites");
+    favorites=unwrap(data,"favorites");
+    renderPrompts(favorites,"favoritesList");
+  }catch{
+    target.innerHTML='<div class="empty glass">Не удалось загрузить избранное.</div>';
+  }
+}
+
+function updateBalance(value){
+  crystalBalance=Number(value)||0;
+  document.getElementById("balance").textContent=crystalBalance;
+  document.getElementById("profileBalance").textContent=crystalBalance+" ◆";
+}
+
+async function loadProfile(){
+  try{
+    const data=await api("/api/me");
+    user=data.user||data;
+
+    updateBalance(user.balance??user.crystals??0);
+
+    const name=[user.first_name,user.last_name].filter(Boolean).join(" ")||
+      user.username||"Пользователь FRAME";
+
+    document.getElementById("profileName").textContent=name;
+    document.getElementById("profileUsername").textContent=
+      user.username?"@"+user.username:"Аккаунт Telegram";
+    document.getElementById("unlockedCount").textContent=
+      user.unlocked_count??"—";
+  }catch{
+    document.getElementById("profileName").textContent=
+      tg?.initDataUnsafe?.user?.first_name||"Пользователь FRAME";
+    document.getElementById("profileUsername").textContent=
+      "Открой приложение через Telegram";
+  }
+}
+
+async function init(){
+  if(!initData)toast("Открой FRAME через Telegram-бота");
+  await loadProfile();
+  await fetchPrompts();
+}
+
+init();
 </script>
-</body>	
+</body>
 </html>
