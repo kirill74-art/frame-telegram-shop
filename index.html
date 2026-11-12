@@ -1,983 +1,154 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#090b14">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#090b12">
 <title>FRAME — Prompt Store</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
 <style>
-:root{
-  color-scheme:dark;
-  --bg:#090b14;
-  --surface:rgba(255,255,255,.065);
-  --surface2:rgba(255,255,255,.105);
-  --line:rgba(255,255,255,.11);
-  --text:#f6f7ff;
-  --muted:#9299ad;
-  --blue:#91aaff;
-  --purple:#b69aff;
-  --green:#8be3ba;
-  --shadow:0 18px 55px rgba(0,0,0,.25);
-}
-body.light{
-  color-scheme:light;
-  --bg:#f2f4fa;
-  --surface:rgba(255,255,255,.67);
-  --surface2:rgba(255,255,255,.9);
-  --line:rgba(50,60,90,.12);
-  --text:#171b2c;
-  --muted:#747b90;
-  --blue:#526fe0;
-  --purple:#9367d7;
-  --green:#238e61;
-  --shadow:0 15px 45px rgba(60,70,110,.10);
-}
+:root{color-scheme:dark;--bg:#090b12;--panel:#121622;--panel2:#191f2d;--line:#262e40;--muted:#8993a8;--text:#f5f7fb;--gold:#e9c46a;--violet:#9b8cff;--cyan:#79d7e8}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{
-  margin:0;
-  min-height:100vh;
-  color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:
-    radial-gradient(ellipse at 12% 0%,rgba(89,116,230,.23),transparent 38%),
-    radial-gradient(ellipse at 95% 35%,rgba(157,91,211,.16),transparent 35%),
-    var(--bg);
-  background-attachment:fixed;
-  transition:background .3s,color .3s;
-}
+body{margin:0;background:radial-gradient(ellipse at 50% -20%,#252443 0,transparent 50%),var(--bg);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;padding-bottom:92px}
 button,input{font:inherit}
-button{color:inherit;cursor:pointer}
-button:active{transform:scale(.975)}
-[hidden]{display:none!important}
+button{cursor:pointer;color:inherit}
+.wrap{max-width:720px;margin:auto;padding:18px 16px 28px}
+.top{display:flex;justify-content:space-between;align-items:center;margin:8px 0 22px}
+.brand{font-size:25px;font-weight:900;letter-spacing:4px}
+.brand span{color:var(--gold)}
+.balance{border:1px solid #51472c;background:#211e17;border-radius:30px;padding:9px 13px;color:var(--gold);font-weight:800}
+.hero{padding:23px;border:1px solid #35314f;border-radius:25px;background:linear-gradient(135deg,#22213b,#151a2b 65%,#172a36);box-shadow:0 18px 50px #0005;position:relative;overflow:hidden}
+.hero:after{content:"✦";position:absolute;right:22px;top:12px;font-size:76px;color:#ffffff12}
+.eyebrow{color:var(--gold);font-size:11px;font-weight:800;letter-spacing:2px}
+.hero h1{font-size:29px;line-height:1.1;margin:12px 0 8px}
+.hero p{color:#b8bfd0;line-height:1.5;margin:0;max-width:85%}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin:26px 2px 13px}
+.section-head h2{font-size:18px;margin:0}
+.muted{color:var(--muted);font-size:12px}
+.search{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:14px 15px;color:white;outline:none;margin:18px 0 4px}
+.search:focus{border-color:var(--violet)}
+.categories{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.cat{min-height:116px;text-align:left;padding:15px;border:1px solid var(--line);border-radius:19px;background:linear-gradient(145deg,#171d2a,#10141e);position:relative;overflow:hidden}
+.cat:active,.prompt:active{transform:scale(.985)}
+.cat .emoji{font-size:25px}
+.cat strong{display:block;margin:11px 0 4px;font-size:14px}
+.cat small{color:var(--muted)}
+.cat.active{border-color:#9b8cff;box-shadow:0 0 0 1px #9b8cff33}
+.list{display:grid;gap:10px}
+.prompt{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:14px;border-radius:17px;border:1px solid var(--line);background:var(--panel)}
+.picon{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:13px;background:#24243a;font-size:20px}
+.pinfo{min-width:0;flex:1}
+.pinfo b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pinfo small{display:block;color:var(--muted);margin-top:5px}
+.price{font-size:12px;color:var(--gold);font-weight:800;white-space:nowrap}
+.free{color:#8ce0b0}
+.bottom{position:fixed;bottom:0;left:0;right:0;z-index:5;padding:9px 14px calc(9px + env(safe-area-inset-bottom));background:linear-gradient(180deg,#101522e8,#0b0e17f5);border-top:1px solid #34364d;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.nav{max-width:720px;margin:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.nav button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:59px;border:1px solid transparent;background:transparent;color:#8d96aa;border-radius:17px;padding:7px 2px 6px;font-size:10px;font-weight:700;letter-spacing:.1px;transition:background .18s,border-color .18s,color .18s,transform .18s}
+.nav button:active{transform:scale(.96)}
+.nav button .nav-icon{width:29px;height:27px;display:grid;place-items:center;font-size:21px;line-height:1;border-radius:10px;filter:saturate(.8)}
+.nav button.active{color:#eeeaff;background:linear-gradient(145deg,#302d50,#1b2032);border-color:#625a91;box-shadow:inset 0 1px 0 #ffffff18,0 5px 18px #0004}
+.nav button.active .nav-icon{filter:none;text-shadow:0 0 14px #b9a7ff88}
+.nav button[data-page="favorites"].active{color:#eadcff;background:linear-gradient(145deg,#392858,#1b1b32);border-color:#8c69cb;box-shadow:inset 0 1px 0 #ffffff20,0 5px 22px #8d5cff22}
+.nav button[data-page="favorites"].active .nav-icon{filter:none}
+.nav button[data-page="favorites"].active:after{background:#c7a2ff;box-shadow:0 0 12px #a875ff}
+.nav button.active:after{content:"";position:absolute;bottom:3px;width:17px;height:2px;border-radius:4px;background:#c2b4ff;box-shadow:0 0 9px #a99aff}
+.nav button:focus-visible{outline:2px solid #b7a8ff;outline-offset:2px}
 
-.app{
-  width:min(100%,650px);
-  margin:auto;
-  padding:20px 17px 115px;
-}
-.glass{
-  background:linear-gradient(135deg,var(--surface2),var(--surface));
-  border:1px solid var(--line);
-  box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.07);
-  backdrop-filter:blur(26px) saturate(160%);
-  -webkit-backdrop-filter:blur(26px) saturate(160%);
-}
-.top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin-bottom:25px;
-}
-.brand{
-  font-size:27px;
-  font-weight:950;
-  letter-spacing:5px;
-}
-.brand span{
-  background:linear-gradient(120deg,#a7bdff,#c19aff);
-  -webkit-background-clip:text;
-  color:transparent;
-}
-.top-actions{display:flex;gap:9px}
-.icon-btn{
-  width:43px;height:43px;
-  border-radius:15px;
-  border:1px solid var(--line);
-  background:var(--surface);
-  font-size:19px;
-}
-.hero{
-  position:relative;
-  overflow:hidden;
-  padding:25px;
-  border-radius:29px;
-  margin-bottom:25px;
-  isolation:isolate;
-}
-.hero:before{
-  content:"";
-  position:absolute;
-  width:220px;height:220px;
-  border-radius:50%;
-  right:-90px;top:-115px;
-  background:rgba(133,160,255,.27);
-  filter:blur(35px);
-  z-index:-1;
-}
-.hero:after{
-  content:"";
-  position:absolute;
-  width:130px;height:130px;
-  border-radius:50%;
-  right:35px;bottom:-100px;
-  background:rgba(181,133,255,.2);
-  filter:blur(35px);
-  z-index:-1;
-}
-.eyebrow{
-  color:var(--blue);
-  font-size:10px;
-  font-weight:850;
-  letter-spacing:2.4px;
-}
-.hero h1{
-  font-size:clamp(28px,7vw,37px);
-  line-height:1.08;
-  letter-spacing:-1.3px;
-  margin:14px 0 11px;
-  max-width:360px;
-}
-.sub{
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.55;
-  max-width:340px;
-}
-.balance{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  padding:12px 16px;
-  margin-top:21px;
-  border-radius:16px;
-  border:1px solid var(--line);
-  background:var(--surface2);
-  font-size:14px;
-  font-weight:800;
-}
-.gem{
-  font-size:20px;
-  color:#a9c5ff;
-  text-shadow:0 0 17px #86a8ff;
-}
-.section-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin:26px 2px 14px;
-}
-.section-head h2{
-  margin:0;
-  font-size:19px;
-  letter-spacing:-.4px;
-}
-.small{color:var(--muted);font-size:11px}
-.categories{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:11px;
-}
-.category{
-  position:relative;
-  min-height:123px;
-  padding:16px;
-  text-align:left;
-  border-radius:22px;
-  overflow:hidden;
-  transition:.22s;
-}
-.category.active{
-  border-color:rgba(145,170,255,.65);
-  background:linear-gradient(145deg,rgba(115,144,255,.23),var(--surface));
-  box-shadow:0 8px 30px rgba(105,130,255,.12);
-}
-.category .emoji{
-  display:block;
-  font-size:25px;
-  margin-bottom:12px;
-}
-.category strong{
-  display:block;
-  font-size:13px;
-  line-height:1.35;
-}
-.category small{
-  display:block;
-  color:var(--muted);
-  margin-top:6px;
-  font-size:10px;
-}
-.search{
-  height:52px;
-  display:flex;
-  align-items:center;
-  gap:11px;
-  padding:0 16px;
-  border-radius:17px;
-  margin-bottom:14px;
-}
-.search span{font-size:23px;color:var(--muted)}
-.search input{
-  flex:1;
-  width:100%;
-  min-width:0;
-  border:0;
-  outline:0;
-  background:transparent;
-  color:var(--text);
-  font-size:14px;
-}
-.search input::placeholder{color:var(--muted)}
-.filters{
-  display:flex;
-  gap:8px;
-  overflow:auto;
-  padding:2px 0 10px;
-  scrollbar-width:none;
-}
-.filters::-webkit-scrollbar{display:none}
-.chip{
-  flex-shrink:0;
-  padding:9px 14px;
-  border-radius:30px;
-  border:1px solid var(--line);
-  background:var(--surface);
-  color:var(--muted);
-  font-size:11px;
-}
-.chip.active{
-  background:rgba(125,151,255,.2);
-  border-color:rgba(145,170,255,.5);
-  color:var(--text);
-}
-.prompt-list{display:grid;gap:11px}
-.prompt{
-  width:100%;
-  padding:17px;
-  text-align:left;
-  border-radius:21px;
-  transition:.2s;
-}
-.prompt-top{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:12px;
-}
-.prompt-title{
-  font-size:14px;
-  line-height:1.4;
-  font-weight:800;
-}
-.tag{
-  flex-shrink:0;
-  padding:6px 9px;
-  border-radius:20px;
-  background:rgba(145,170,255,.13);
-  color:var(--blue);
-  font-size:9px;
-  font-weight:800;
-}
-.tag.free{
-  color:var(--green);
-  background:rgba(75,195,140,.12);
-}
-.prompt-desc{
-  color:var(--muted);
-  font-size:12px;
-  line-height:1.55;
-  margin-top:10px;
-}
-.prompt-bottom{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-top:14px;
-}
-.price{
-  font-size:11px;
-  color:var(--blue);
-  font-weight:800;
-}
-.open-label{font-size:11px;color:var(--muted)}
-.empty{
-  text-align:center;
-  padding:35px 16px;
-  border-radius:20px;
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.6;
-}
-.loading{
-  text-align:center;
-  padding:28px;
-  color:var(--muted);
-  font-size:13px;
-}
-.profile-card{
-  padding:20px;
-  border-radius:23px;
-  margin-bottom:12px;
-}
-.profile-avatar{
-  width:62px;height:62px;
-  display:grid;
-  place-items:center;
-  border-radius:21px;
-  background:linear-gradient(135deg,rgba(145,170,255,.25),rgba(181,154,255,.2));
-  font-size:29px;
-  margin-bottom:14px;
-}
-.profile-name{font-size:19px;font-weight:850}
-.profile-line{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  padding:14px 0;
-  border-bottom:1px solid var(--line);
-  font-size:13px;
-}
-.profile-line:last-child{border:0}
-.action{
-  width:100%;
-  border:0;
-  border-radius:16px;
-  padding:15px;
-  margin-top:10px;
-  color:#111526;
-  background:linear-gradient(110deg,#91adff,#c0a0f5);
-  font-weight:850;
-  font-size:13px;
-  box-shadow:0 7px 24px rgba(130,145,255,.17);
-}
-.action.secondary{
-  color:var(--text);
-  background:var(--surface2);
-  border:1px solid var(--line);
-  box-shadow:none;
-}
-.action.danger{
-  color:white;
-  background:linear-gradient(110deg,#d96b83,#a94d73);
-}
-.bottom-nav{
-  position:fixed;
-  z-index:5;
-  bottom:12px;
-  left:50%;
-  transform:translateX(-50%);
-  width:min(calc(100% - 24px),570px);
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  padding:9px;
-  border-radius:23px;
-  background:rgba(22,25,42,.86);
-  border:1px solid rgba(255,255,255,.14);
-  backdrop-filter:blur(28px);
-  -webkit-backdrop-filter:blur(28px);
-  box-shadow:0 12px 40px #0006;
-}
-body.light .bottom-nav{background:rgba(255,255,255,.87)}
-.nav-btn{
-  border:0;
-  background:transparent;
-  color:#9298ad;
-  padding:7px 2px;
-  font-size:10px;
-}
-.nav-btn span{
-  display:block;
-  font-size:20px;
-  margin-bottom:4px;
-}
-.nav-btn.active{color:#aebfff}
-body.light .nav-btn.active{color:#526fe0}
-.modal-bg{
-  display:none;
-  position:fixed;
-  inset:0;
-  z-index:10;
-  background:rgba(0,0,0,.68);
-  backdrop-filter:blur(9px);
-  padding:14px;
-  align-items:flex-end;
-  justify-content:center;
-}
-.modal-bg.show{display:flex}
-.modal{
-  width:min(100%,560px);
-  max-height:88vh;
-  overflow:auto;
-  padding:22px;
-  border-radius:27px;
-  background:linear-gradient(145deg,#242941,#111522);
-  border:1px solid rgba(255,255,255,.17);
-  box-shadow:0 20px 70px #0009;
-  animation:slideUp .25s ease;
-}
-body.light .modal{
-  background:linear-gradient(145deg,#fff,#edf0fa);
-  border-color:var(--line);
-}
-@keyframes slideUp{
-  from{transform:translateY(25px);opacity:0}
-  to{transform:translateY(0);opacity:1}
-}
-.modal-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:12px;
-  margin-bottom:9px;
-}
-.modal h2{font-size:20px;margin:0}
-.close{
-  flex-shrink:0;
-  border:0;
-  background:var(--surface2);
-  border-radius:12px;
-  width:37px;height:37px;
-  font-size:21px;
-}
-.prompt-text{
-  white-space:pre-wrap;
-  overflow-wrap:anywhere;
-  color:var(--text);
-  font-size:13px;
-  line-height:1.7;
-  margin:19px 0;
-}
-.confirm-box{
-  padding:15px;
-  margin:17px 0;
-  border-radius:17px;
-  background:rgba(145,170,255,.1);
-  border:1px solid rgba(145,170,255,.2);
-  font-size:13px;
-  line-height:1.6;
-}
-.toast{
-  position:fixed;
-  z-index:20;
-  bottom:100px;
-  left:50%;
-  transform:translateX(-50%);
-  background:#252b40;
-  color:white;
-  border:1px solid rgba(255,255,255,.15);
-  border-radius:14px;
-  padding:12px 17px;
-  font-size:12px;
-  display:none;
-  max-width:90%;
-  text-align:center;
-}
+/* Фиолетовое стеклянное сердце с жидкостью */
+.glass-heart{width:27px;height:27px;display:block;overflow:visible;filter:drop-shadow(0 0 5px #a66cff66)}
+.glass-heart .liquid{animation:heart-wave 3.4s ease-in-out infinite;transform-origin:center}
+.glass-heart .bubble{animation:heart-bubble 2.8s ease-in-out infinite}
+.glass-heart .bubble:nth-of-type(2){animation-delay:.8s}
+.nav button.active .glass-heart{filter:drop-shadow(0 0 8px #b77cffcc)}
+.heart-inline{width:19px;height:19px;vertical-align:-4px;margin-right:5px;filter:drop-shadow(0 0 5px #a66cff66)}
+@keyframes heart-wave{0%,100%{transform:translateY(1px)}50%{transform:translateY(-3px)}}
+@keyframes heart-bubble{0%,100%{opacity:.25;transform:translateY(2px)}50%{opacity:.95;transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){.glass-heart .liquid,.glass-heart .bubble{animation:none}}
+@media(max-width:360px){.nav{gap:4px}.nav button{font-size:9px}}
+
+.page{display:none}
+.page.active{display:block}
+.back{border:0;background:transparent;color:#c8c1ff;padding:5px 0 15px}
+.modal{position:fixed;inset:0;z-index:10;background:#000a;display:none;align-items:flex-end;justify-content:center}
+.modal.show{display:flex}
+.sheet{width:min(720px,100%);max-height:88vh;overflow:auto;border-radius:25px 25px 0 0;border:1px solid var(--line);background:#121722;padding:22px 18px calc(25px + env(safe-area-inset-bottom))}
+.sheet h2{margin:8px 0}
+.sheet p{color:#c0c7d6;line-height:1.55}
+.action{width:100%;padding:14px;border:0;border-radius:14px;background:linear-gradient(100deg,#b5a4ff,#7f73df);color:#111322;font-weight:900;margin-top:12px}
+.secondary{background:#222a39;color:#eef}
+.packs{display:grid;gap:10px}
+.pack{padding:16px;border:1px solid var(--line);border-radius:15px;background:#1a2030;display:flex;justify-content:space-between;align-items:center}
+.profilebox{padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--panel);margin:12px 0}
+.empty{text-align:center;padding:35px 15px;color:var(--muted)}
+.toast{position:fixed;z-index:20;bottom:100px;left:50%;transform:translateX(-50%);background:#242b3b;border:1px solid #46516a;border-radius:12px;padding:11px 16px;display:none;max-width:90%;text-align:center}
 .toast.show{display:block}
-@media(min-width:520px){
-  .app{padding-top:30px}
-  .hero{padding:32px}
-}
 </style>
 </head>
-
 <body>
-<div class="app">
-
-<header class="top">
-  <div class="brand">FR<span>A</span>ME</div>
-  <div class="top-actions">
-    <button class="icon-btn" onclick="toggleTheme()" aria-label="Сменить тему">☼</button>
-    <button class="icon-btn" onclick="showPage('profile')" aria-label="Профиль">◉</button>
-  </div>
-</header>
-
-<main id="homePage">
-
-<section class="hero glass">
-  <div class="eyebrow">FRAME PROMPT STORE</div>
-  <h1>Идеи, которые<br>оживают с ИИ.</h1>
-  <div class="sub">Коллекция готовых промптов для создания историй, видео и необычных миров.</div>
-  <div class="balance">
-    <span class="gem">◆</span>
-    <span id="balance">—</span>
-    <span class="small">кристаллов</span>
-  </div>
-</section>
-
-<div class="section-head">
-  <h2>Коллекции</h2>
-  <span class="small">04 категории</span>
+<div class="wrap">
+ <header class="top"><div class="brand">FR<span>A</span>ME</div><button class="balance" onclick="openShop()">✧ <b id="balance">0</b></button></header>
+ <main id="home" class="page active">
+  <section class="hero"><div class="eyebrow">YOUR CREATIVE SPACE</div><h1>Идеи, которые<br>цепляют.</h1><p>Открывай готовые промпты для историй, загадок и необычных сценариев.</p></section>
+  <input id="search" class="search" placeholder="⌕  Найти промпт..." oninput="searchPrompts(this.value)">
+  <div class="section-head"><h2>Категории</h2><span class="muted">4 коллекции</span></div>
+  <div id="categories" class="categories"></div>
+  <div class="section-head"><h2 id="listTitle">Популярные промпты</h2><span class="muted" id="listCount"></span></div>
+  <div id="promptList" class="list"></div>
+ </main>
+ <main id="favorites" class="page"><div class="section-head"><h2>Избранное</h2></div><div id="favoritesList" class="list"></div></main>
+ <main id="history" class="page"><div class="section-head"><h2>Мои открытия</h2></div><div id="historyList" class="list"></div></main>
+ <main id="profile" class="page"><div class="section-head"><h2>Профиль</h2></div><div class="profilebox"><div class="muted">ВАШ БАЛАНС</div><h1 style="color:var(--gold);margin:8px 0">✧ <span id="profileBalance">0</span></h1><button class="action" onclick="openShop()">Пополнить кристаллы</button></div><div class="profilebox"><div class="muted">АККАУНТ</div><h3 id="userName">Пользователь FRAME</h3><p id="openedCount" class="muted">Открыто промптов: 0</p></div></main>
 </div>
-
-<section class="categories" id="categories">
-  <button class="category glass active" data-category="Страшные истории" onclick="selectCategory('Страшные истории')">
-    <span class="emoji">🌑</span>
-    <strong>Страшные истории</strong>
-    <small>99 промптов</small>
-  </button>
-  <button class="category glass" data-category="Представь, если…" onclick="selectCategory('Представь, если…')">
-    <span class="emoji">🌌</span>
-    <strong>Представь, если…</strong>
-    <small>99 промптов</small>
-  </button>
-  <button class="category glass" data-category="Ночные правила" onclick="selectCategory('Ночные правила')">
-    <span class="emoji">🌙</span>
-    <strong>Ночные правила</strong>
-    <small>99 промптов</small>
-  </button>
-  <button class="category glass" data-category="Тайны и загадки" onclick="selectCategory('Тайны и загадки')">
-    <span class="emoji">🔐</span>
-    <strong>Тайны и загадки</strong>
-    <small>99 промптов</small>
-  </button>
-</section>
-
-<div class="section-head">
-  <h2 id="listTitle">Страшные истории</h2>
-  <span class="small" id="count">Загрузка…</span>
-</div>
-
-<label class="search glass">
-  <span>⌕</span>
-  <input id="searchInput" type="search" placeholder="Поиск по коллекции..." oninput="loadPrompts()">
-</label>
-
-<div class="filters">
-  <button class="chip active" onclick="setFilter('all',this)">Все</button>
-  <button class="chip" onclick="setFilter('free',this)">Бесплатные</button>
-  <button class="chip" onclick="setFilter('paid',this)">Платные</button>
-</div>
-
-<section class="prompt-list" id="promptList">
-  <div class="loading">Загружаем коллекцию…</div>
-</section>
-</main>
-
-<main id="favoritesPage" hidden>
-  <div class="section-head"><h2>Избранное</h2></div>
-  <p class="small">Твои сохранённые идеи</p>
-  <section class="prompt-list" id="favoritesList"></section>
-</main>
-
-<main id="profilePage" hidden>
-  <div class="section-head"><h2>Мой профиль</h2></div>
-
-  <section class="profile-card glass">
-    <div class="profile-avatar">👤</div>
-    <div class="profile-name" id="profileName">Пользователь FRAME</div>
-    <div class="small" id="profileUsername">Аккаунт Telegram</div>
-  </section>
-
-  <section class="profile-card glass">
-    <div class="profile-line">
-      <span>Баланс</span>
-      <strong id="profileBalance">— ◆</strong>
-    </div>
-    <div class="profile-line">
-      <span>Открытые промпты</span>
-      <strong id="unlockedCount">—</strong>
-    </div>
-    <div class="profile-line">
-      <span>Статус</span>
-      <strong>Участник FRAME</strong>
-    </div>
-  </section>
-
-  <section class="profile-card glass">
-    <h3 style="margin-top:0">💎 Кристаллы</h3>
-    <p class="small">Пополнение баланса через Telegram Stars.</p>
-    <button class="action" onclick="toast('Платёжный модуль подключим отдельно')">Пополнить баланс</button>
-  </section>
-</main>
-
-<main id="historyPage" hidden>
-  <div class="section-head"><h2>Мои открытия</h2></div>
-  <section class="profile-card glass">
-    <div style="font-size:28px;margin-bottom:12px">📚</div>
-    <strong>История промптов</strong>
-    <p class="small">Здесь будут отображаться открытые тобой промпты. Для отображения истории потребуется отдельный API-метод на сервере.</p>
-  </section>
-</main>
-
-</div>
-
-<nav class="bottom-nav">
-  <button class="nav-btn active" onclick="showPage('home')"><span>⌂</span>Главная</button>
-  <button class="nav-btn" onclick="showPage('favorites')"><span>♡</span>Избранное</button>
-  <button class="nav-btn" onclick="showPage('history')"><span>▤</span>Открытия</button>
-  <button class="nav-btn" onclick="showPage('profile')"><span>◉</span>Профиль</button>
-</nav>
-
-<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
-  <section class="modal">
-    <div class="modal-head">
-      <h2 id="modalTitle">Промпт</h2>
-      <button class="close" onclick="closeModal()">×</button>
-    </div>
-    <div class="small" id="modalMeta"></div>
-    <div class="prompt-text" id="modalText"></div>
-    <div id="purchaseBox" hidden>
-      <div class="confirm-box" id="purchaseInfo"></div>
-      <button class="action" id="confirmPurchaseButton" onclick="confirmPurchase()">Подтвердить покупку</button>
-    </div>
-    <button class="action" id="copyButton" onclick="copyPrompt()" hidden>Скопировать промпт</button>
-    <button class="action secondary" id="favoriteButton" onclick="toggleFavorite()">♡ В избранное</button>
-  </section>
-</div>
-
-<div class="toast" id="toast"></div>
-
+<nav class="bottom" aria-label="Основная навигация"><div class="nav">
+ <button type="button" class="active" data-page="home" aria-label="Главная" aria-current="page" onclick="showPage('home',this)"><span class="nav-icon" aria-hidden="true">🏠</span><span>Главная</span></button>
+ <button type="button" data-page="favorites" aria-label="Избранное" onclick="showPage('favorites',this)"><span class="nav-icon" aria-hidden="true">
+<svg class="glass-heart" viewBox="0 0 64 60" role="img" aria-label="Фиолетовое стеклянное сердце">
+<defs>
+<linearGradient id="navGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".45" stop-color="#d9c2ff" stop-opacity=".55"/><stop offset="1" stop-color="#8c5bdb" stop-opacity=".9"/></linearGradient>
+<linearGradient id="navLiquid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8caff"/><stop offset=".48" stop-color="#b36cff"/><stop offset="1" stop-color="#6126bc"/></linearGradient>
+<clipPath id="navHeartClip"><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z"/></clipPath>
+</defs>
+<g clip-path="url(#navHeartClip)">
+<rect width="64" height="60" fill="#b98cff" fill-opacity=".16"/>
+<path class="liquid" d="M0 29Q10 24 20 29T40 29T64 29V62H0Z" fill="url(#navLiquid)"/>
+<path d="M0 29Q10 24 20 29T40 29T64 29" fill="none" stroke="#f4e6ff" stroke-width="1.8" opacity=".9"/>
+<circle class="bubble" cx="22" cy="38" r="2.2" fill="#fff"/>
+<circle class="bubble" cx="43" cy="43" r="1.5" fill="#fff"/>
+</g>
+<path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z" fill="none" stroke="url(#navGlass)" stroke-width="2.5"/>
+<path d="M13 15Q17 7 24 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>
+</svg>
+</span><span>Избранное</span></button>
+ <button type="button" data-page="history" aria-label="Открытия" onclick="showPage('history',this)"><span class="nav-icon" aria-hidden="true">📚</span><span>Открытия</span></button>
+ <button type="button" data-page="profile" aria-label="Профиль" onclick="showPage('profile',this)"><span class="nav-icon" aria-hidden="true">👤</span><span>Профиль</span></button>
+</div></nav>
+<div id="modal" class="modal" onclick="if(event.target===this)closeModal()"><section class="sheet" id="sheet"></section></div><div id="toast" class="toast"></div>
 <script>
-const tg=window.Telegram?.WebApp;
-if(tg){tg.ready();tg.expand();}
-
-const API="";
+const tg=window.Telegram?.WebApp; tg?.ready(); tg?.expand();
 const initData=tg?.initData||"";
-
-let currentCategory="Страшные истории";
-let currentFilter="all";
-let currentPrompt=null;
-let prompts=[];
-let favorites=[];
-let user=null;
-let crystalBalance=0;
-let purchasePending=false;
-let toastTimer;
-
-function headers(){
-  return {
-    "Content-Type":"application/json",
-    "X-Telegram-Init-Data":initData
-  };
-}
-
-async function api(path,options={}){
-  const response=await fetch(API+path,{
-    ...options,
-    headers:{...headers(),...(options.headers||{})}
-  });
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(data.error||data.message||"Ошибка сервера");
-  return data;
-}
-
-function toast(message){
-  const el=document.getElementById("toast");
-  el.textContent=message;
-  el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.classList.remove("show"),2600);
-}
-
-function toggleTheme(){
-  document.body.classList.toggle("light");
-  const light=document.body.classList.contains("light");
-  try{localStorage.setItem("frame-theme",light?"light":"dark");}catch{}
-  document.querySelector('meta[name="theme-color"]').content=light?"#f2f4fa":"#090b14";
-}
-
-try{
-  if(localStorage.getItem("frame-theme")==="light"){
-    document.body.classList.add("light");
-    document.querySelector('meta[name="theme-color"]').content="#f2f4fa";
-  }
-}catch{}
-
-function showPage(page){
-  ["home","favorites","profile","history"].forEach(name=>{
-    document.getElementById(name+"Page").hidden=name!==page;
-  });
-  document.querySelectorAll(".nav-btn").forEach((el,i)=>{
-    el.classList.toggle("active",["home","favorites","history","profile"][i]===page);
-  });
-  if(page==="favorites")loadFavorites();
-  if(page==="profile")loadProfile();
-}
-
-function selectCategory(category){
-  currentCategory=category;
-  document.querySelectorAll(".category").forEach(el=>{
-    el.classList.toggle("active",el.dataset.category===category);
-  });
-  document.getElementById("listTitle").textContent=category;
-  loadPrompts();
-}
-
-function setFilter(filter,button){
-  currentFilter=filter;
-  document.querySelectorAll(".chip").forEach(el=>el.classList.remove("active"));
-  button.classList.add("active");
-  loadPrompts();
-}
-
-function unwrap(data,key){
-  if(Array.isArray(data))return data;
-  return data?.[key]||data?.items||data?.data||[];
-}
-
-function isFree(item){
-  return item.is_free===true||item.free===true||Number(item.price||0)===0;
-}
-
-function escapeHTML(value){
-  return String(value).replace(/[&<>"']/g,c=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-  }[c]));
-}
-
-function renderPrompts(items,targetId="promptList"){
-  const target=document.getElementById(targetId);
-  if(!items.length){
-    target.innerHTML='<div class="empty glass">Здесь пока нет промптов.<br>Попробуй другую категорию или поиск.</div>';
-    return;
-  }
-
-  target.innerHTML=items.map(item=>{
-    const free=isFree(item);
-    const id=Number(item.id);
-    const title=escapeHTML(item.title||"Без названия");
-    const description=escapeHTML(item.description||item.short_description||"Подробный промпт для создания видео");
-    const price=Number(item.price||1);
-
-    return `
-      <button class="prompt glass" onclick="openPrompt(${id})">
-        <div class="prompt-top">
-          <span class="prompt-title">${title}</span>
-          <span class="tag ${free?"free":""}">${free?"БЕСПЛАТНО":"◆ "+price}</span>
-        </div>
-        <div class="prompt-desc">${description}</div>
-        <div class="prompt-bottom">
-          <span class="price">${free?"Бесплатно":price+" ◆"}</span>
-          <span class="open-label">Подробнее →</span>
-        </div>
-      </button>`;
-  }).join("");
-}
-
-let searchTimer;
-function loadPrompts(){
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(fetchPrompts,250);
-}
-
-async function fetchPrompts(){
-  const target=document.getElementById("promptList");
-  target.innerHTML='<div class="loading">Загружаем коллекцию…</div>';
-  const search=document.getElementById("searchInput").value.trim();
-
-  try{
-    const params=new URLSearchParams({category:currentCategory});
-    if(search)params.set("search",search);
-
-    const data=await api("/api/prompts?"+params.toString());
-    prompts=unwrap(data,"prompts");
-
-    if(currentFilter==="free")prompts=prompts.filter(isFree);
-    if(currentFilter==="paid")prompts=prompts.filter(item=>!isFree(item));
-
-    document.getElementById("count").textContent=prompts.length+" промптов";
-    renderPrompts(prompts);
-  }catch(error){
-    target.innerHTML='<div class="empty glass">Не удалось загрузить коллекцию.<br>Проверь подключение сервера.</div>';
-    document.getElementById("count").textContent="Нет связи";
-  }
-}
-
-function setModalButtons({copy=false,purchase=false}={}){
-  document.getElementById("copyButton").hidden=!copy;
-  document.getElementById("purchaseBox").hidden=!purchase;
-}
-
-async function openPrompt(id){
-  currentPrompt=prompts.find(item=>Number(item.id)===id)||
-    favorites.find(item=>Number(item.id)===id)||{id};
-
-  purchasePending=false;
-  document.getElementById("modalTitle").textContent=currentPrompt.title||"Промпт";
-  document.getElementById("modalMeta").textContent="Загружаем доступ…";
-  document.getElementById("modalText").textContent="Загрузка…";
-  document.getElementById("purchaseBox").hidden=true;
-  document.getElementById("copyButton").hidden=true;
-  document.getElementById("favoriteButton").hidden=false;
-  document.getElementById("modalBg").classList.add("show");
-
-  const favoriteExists=favorites.some(item=>Number(item.id)===id);
-  document.getElementById("favoriteButton").textContent=
-    favoriteExists?"♥ В избранном":"♡ В избранное";
-
-  try{
-    const data=await api("/api/prompts/"+id);
-    const prompt=data.prompt||data;
-
-    if(prompt.full_prompt||prompt.text||prompt.content){
-      showOpenedPrompt(prompt,data);
-      return;
-    }
-
-    if(prompt.locked||data.locked||(!isFree(prompt)&&!prompt.full_prompt)){
-      showPurchaseConfirmation(prompt);
-      return;
-    }
-
-    showPurchaseConfirmation(prompt);
-  }catch(error){
-    document.getElementById("modalText").textContent=error.message||"Не удалось загрузить промпт.";
-    document.getElementById("modalMeta").textContent="Ошибка";
-  }
-}
-
-function showOpenedPrompt(prompt,data={}){
-  const full=prompt.full_prompt||prompt.text||prompt.content;
-  if(!full){
-    showPurchaseConfirmation(prompt);
-    return;
-  }
-
-  currentPrompt={...currentPrompt,...prompt,full_prompt:full};
-  document.getElementById("modalText").textContent=full;
-  document.getElementById("modalMeta").textContent=
-    isFree(currentPrompt)?"Бесплатный промпт":"Доступ открыт";
-  setModalButtons({copy:true});
-
-  if(data.balance!==undefined)updateBalance(data.balance);
-}
-
-function showPurchaseConfirmation(prompt){
-  currentPrompt={...currentPrompt,...prompt};
-  const price=Number(prompt.price||currentPrompt.price||1);
-
-  document.getElementById("modalText").textContent=
-    "Этот промпт пока закрыт. Чтобы увидеть полный текст, подтверди покупку.";
-  document.getElementById("modalMeta").textContent="Платный доступ";
-  document.getElementById("purchaseInfo").textContent=
-    "Стоимость: "+price+" ◆. Текущий баланс: "+crystalBalance+" ◆. Кристаллы будут списаны только после твоего подтверждения.";
-  document.getElementById("confirmPurchaseButton").textContent=
-    "Купить за "+price+" ◆";
-  document.getElementById("confirmPurchaseButton").disabled=false;
-  document.getElementById("purchaseBox").hidden=false;
-  document.getElementById("copyButton").hidden=true;
-}
-
-async function confirmPurchase(){
-  if(purchasePending||!currentPrompt?.id)return;
-
-  purchasePending=true;
-  const button=document.getElementById("confirmPurchaseButton");
-  button.disabled=true;
-  button.textContent="Покупаем…";
-
-  try{
-    const data=await api("/api/prompts/"+currentPrompt.id+"/unlock",{method:"POST"});
-    const prompt=data.prompt||data;
-    showOpenedPrompt(prompt,data);
-
-    if(data.balance!==undefined)updateBalance(data.balance);
-    else await loadProfile();
-
-    toast("Промпт открыт!");
-  }catch(error){
-    document.getElementById("purchaseInfo").textContent=
-      error.message||"Не удалось выполнить покупку.";
-    button.textContent="Повторить покупку";
-    button.disabled=false;
-  }finally{
-    purchasePending=false;
-  }
-}
-
-function closeModal(){
-  if(purchasePending)return;
-  document.getElementById("modalBg").classList.remove("show");
-}
-
-async function copyPrompt(){
-  const text=currentPrompt?.full_prompt;
-  if(!text)return;
-
-  try{
-    await navigator.clipboard.writeText(text);
-    toast("Промпт скопирован");
-  }catch{
-    const area=document.createElement("textarea");
-    area.value=text;
-    document.body.appendChild(area);
-    area.select();
-    try{
-      document.execCommand("copy");
-      toast("Промпт скопирован");
-    }catch{
-      toast("Не удалось скопировать текст");
-    }
-    area.remove();
-  }
-}
-
-async function toggleFavorite(){
-  if(!currentPrompt?.id)return;
-  const id=currentPrompt.id;
-  const exists=favorites.some(item=>Number(item.id)===Number(id));
-
-  try{
-    if(exists){
-      await api("/api/favorites/"+id,{method:"DELETE"});
-      favorites=favorites.filter(item=>Number(item.id)!==Number(id));
-      toast("Удалено из избранного");
-    }else{
-      await api("/api/favorites/"+id,{method:"POST"});
-      favorites.push(currentPrompt);
-      toast("Добавлено в избранное");
-    }
-
-    document.getElementById("favoriteButton").textContent=
-      exists?"♡ В избранное":"♥ В избранном";
-  }catch(error){
-    toast(error.message||"Не удалось изменить избранное");
-  }
-}
-
-async function loadFavorites(){
-  const target=document.getElementById("favoritesList");
-  target.innerHTML='<div class="loading">Загружаем избранное…</div>';
-
-  try{
-    const data=await api("/api/favorites");
-    favorites=unwrap(data,"favorites");
-    renderPrompts(favorites,"favoritesList");
-  }catch{
-    target.innerHTML='<div class="empty glass">Не удалось загрузить избранное.</div>';
-  }
-}
-
-function updateBalance(value){
-  crystalBalance=Number(value)||0;
-  document.getElementById("balance").textContent=crystalBalance;
-  document.getElementById("profileBalance").textContent=crystalBalance+" ◆";
-}
-
-async function loadProfile(){
-  try{
-    const data=await api("/api/me");
-    user=data.user||data;
-
-    updateBalance(user.balance??user.crystals??0);
-
-    const name=[user.first_name,user.last_name].filter(Boolean).join(" ")||
-      user.username||"Пользователь FRAME";
-
-    document.getElementById("profileName").textContent=name;
-    document.getElementById("profileUsername").textContent=
-      user.username?"@"+user.username:"Аккаунт Telegram";
-    document.getElementById("unlockedCount").textContent=
-      user.unlocked_count??"—";
-  }catch{
-    document.getElementById("profileName").textContent=
-      tg?.initDataUnsafe?.user?.first_name||"Пользователь FRAME";
-    document.getElementById("profileUsername").textContent=
-      "Открой приложение через Telegram";
-  }
-}
-
-async function init(){
-  if(!initData)toast("Открой FRAME через Telegram-бота");
-  await loadProfile();
-  await fetchPrompts();
-}
-
-init();
-</script>
-</body>
-</html>
+const headers={"Content-Type":"application/json","X-Telegram-Init-Data":initData};
+const catData=[["Страшные истории","🌑","Тревожные сюжеты и психологический хоррор"],["Представь, если…","🌌","Необычные миры и сценарии будущего"],["Ночные правила","🌙","Инструкции, за которыми скрывается тайна"],["Тайны и загадки","🔐","Расследования и неожиданные разгадки"]];
+let allPrompts=[],currentCategory="",me=null;
+function toast(s){const t=document.getElementById("toast");t.textContent=s;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
+async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers,...opts.headers}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||"Ошибка запроса");return d}
+function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>{x.classList.remove("active");x.removeAttribute("aria-current")});btn?.classList.add("active");btn?.setAttribute("aria-current","page");if(id==="favorites")loadCollection("favorites","favoritesList");if(id==="history")loadCollection("history","historyList")}
+function renderCategories(){document.getElementById("categories").innerHTML=catData.map(([n,e,d])=>`<button class="cat ${currentCategory===n?"active":""}" onclick="selectCategory(${JSON.stringify(n)})"><span class="emoji">${e}</span><strong>${n}</strong><small>${d}</small></button>`).join("")}
+async function loadPrompts(category="",q=""){try{const u=new URLSearchParams();if(category)u.set("category",category);if(q)u.set("q",q);const d=await api("/api/prompts?"+u);allPrompts=d.prompts;renderList(allPrompts,"promptList");document.getElementById("listCount").textContent=allPrompts.length+" шт."}catch(e){toast(e.message);document.getElementById("promptList").innerHTML='<div class="empty">Откройте FRAME через Telegram, чтобы загрузить магазин.</div>'}}
+function renderList(items,target){const el=document.getElementById(target);if(!items.length){el.innerHTML='<div class="empty">Здесь пока ничего нет</div>';return}el.innerHTML=items.map(p=>`<button class="prompt" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="price ${p.is_free?"free":""}">${p.unlocked?"Открыт":p.is_free?"Бесплатно":"✧ "+p.price}</span></button>`).join("")}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function selectCategory(c){currentCategory=currentCategory===c?"":c;renderCategories();document.getElementById("listTitle").textContent=currentCategory||"Популярные промпты";loadPrompts(currentCategory,document.getElementById("search").value)}
+function searchPrompts(q){loadPrompts(currentCategory,q)}
+function openModal(html){document.getElementById("sheet").innerHTML=html;document.getElementById("modal").classList.add("show")}
+function closeModal(){document.getElementById("modal").classList.remove("show")}
+async function openPrompt(id){try{let p=allPrompts.find(x=>x.id===id);if(!p){const d=await api("/api/prompt/"+id);p=d.prompt}if(!p.unlocked){openModal(`<div class="eyebrow">FRAME PROMPT</div><h2>${escapeHtml(p.title)}</h2><p>${escapeHtml(p.description||"Авторский промпт для создания оригинального контента.")}</p><p>Стоимость открытия: <b style="color:var(--gold)">✧ ${p.price} кристалл</b></p><button class="action" onclick="unlockPrompt(${id})">Открыть промпт</button><button class="action secondary" onclick="toggleFavorite(${id})"><svg class="heart-inline" viewBox="0 0 64 60" aria-hidden="true"><defs><linearGradient id="miniGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#d9baff"/><stop offset="1" stop-color="#8651d5"/></linearGradient><linearGradient id="miniLiquid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8caff"/><stop offset="1" stop-color="#692bc4"/></linearGradient><clipPath id="miniClip"><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z"/></clipPath></defs><g clip-path="url(#miniClip)"><rect width="64" height="60" fill="#c49aff" fill-opacity=".2"/><path d="M0 29Q10 24 20 29T40 29T64 29V62H0Z" fill="url(#miniLiquid)"/></g><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z" fill="none" stroke="url(#miniGlass)" stroke-width="4"/></svg>В избранное</button>`);return}
+const d=await api("/api/prompt/"+id);p=d.prompt;openModal(`<div class="eyebrow">${escapeHtml(p.category)}</div><h2>${escapeHtml(p.title)}</h2><p>${escapeHtml(p.full_prompt)}</p><button class="action" onclick="copyPrompt()">Скопировать промпт</button><button class="action secondary" onclick="toggleFavorite(${id})"><svg class="heart-inline" viewBox="0 0 64 60" aria-hidden="true"><defs><linearGradient id="miniGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#d9baff"/><stop offset="1" stop-color="#8651d5"/></linearGradient><linearGradient id="miniLiquid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8caff"/><stop offset="1" stop-color="#692bc4"/></linearGradient><clipPath id="miniClip"><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z"/></clipPath></defs><g clip-path="url(#miniClip)"><rect width="64" height="60" fill="#c49aff" fill-opacity=".2"/><path d="M0 29Q10 24 20 29T40 29T64 29V62H0Z" fill="url(#miniLiquid)"/></g><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z" fill="none" stroke="url(#miniGlass)" stroke-width="4"/></svg>Избранное</button>`);window.currentPromptText=p.full_prompt;
+}catch(e){toast(e.message)}}
+async function unlockPrompt(id){try{const d=await api("/api/unlock",{method:"POST",body:JSON.stringify({promptId:id})});closeModal();if(d.crystals!==undefined)updateBalance(d.crystals);toast(d.already?"Уже открыто":"Промпт добавлен в открытия");await loadPrompts(currentCategory);await loadMe();openPrompt(id)}catch(e){closeModal();toast(e.message);if(e.message.includes("кристаллов"))openShop()}}
+function copyPrompt(){if(!window.currentPromptText)return;if(navigator.clipboard?.writeText)navigator.clipboard.writeText(window.currentPromptText).then(()=>toast("Скопировано")).catch(()=>toast("Не удалось скопировать"));else toast("Копирование недоступно")}
+async function toggleFavorite(id){try{const d=await api("/api/favorites/"+id,{method:"POST"});toast(d.favorite?"Добавлено в избранное":"Удалено из избранного");closeModal();if(document.getElementById("favorites").classList.contains("active"))loadCollection("favorites","favoritesList")}catch(e){toast(e.message)}}
+async function loadCollection(endpoint,target){try{const d=await api("/api/"+endpoint);renderList(d.prompts,target)}catch(e){toast(e.message)}}
+function openShop(){openModal(`<div class="eyebrow">FRAME WALLET</div><h2>Кристаллы</h2><p>Выбери набор. Оплата проходит через Telegram Stars.</p><div class="packs"><button class="pack" onclick="buyPack('pack10')"><b>✧ 10 кристаллов</b><span>10 ⭐</span></button><button class="pack" onclick="buyPack('pack50')"><b>✧ 50 кристаллов</b><span>45 ⭐</span></button><button class="pack" onclick="buyPack('pack100')"><b>✧ 100 кристаллов</b><span>80 ⭐</span></button></div><button class="action secondary" onclick="closeModal()">Закрыть</button>`)}
+async function buyPack(pack){try{const d=await api("/api/stars/invoice",{method:"POST",body:JSON.stringify({pack})});if(!tg?.openInvoice){toast("Откройте магазин внутри Telegram");return}tg.openInvoice(d.url,(status)=>{if(status==="paid"){toast("Оплата получена. Обновляем баланс…");setTimeout(loadMe,1200)}else if(status==="failed")toast("Оплата не прошла");});closeModal()}catch(e){toast(e.message)}}
+function updateBalance(n){document.getElementById("balance").textContent=n;document.getElementById("profileBalance").textContent=n}
+async function loadMe(){try{const d=await api("/api/me");me=d.user;updateBalance(me.crystals);document.getElementById("userName").textContent=
