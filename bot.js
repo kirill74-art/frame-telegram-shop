@@ -1,4 +1,3 @@
-
 const express = require("express");
 const { Telegraf, Markup } = require("telegraf");
 const { Pool } = require("pg");
@@ -6,116 +5,220 @@ const crypto = require("crypto");
 const path = require("path");
 
 const app = express();
-app.use(express.json());
 
-const PORT = process.env.PORT || 10000;
+const PORT = Number(process.env.PORT || 10000);
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
-const MINI_APP_URL =
-  process.env.MINI_APP_URL || "https://frame-shop-i7u4.onrender.com";
+const MINI_APP_URL = process.env.MINI_APP_URL;
 
-if (!BOT_TOKEN) {
-  throw new Error("Не задан BOT_TOKEN в Render Environment");
-}
-
-if (!DATABASE_URL) {
-  throw new Error("Не задан DATABASE_URL в Render Environment");
-}
+if (!BOT_TOKEN) throw new Error("Не задан BOT_TOKEN");
+if (!DATABASE_URL) throw new Error("Не задан DATABASE_URL");
+if (!MINI_APP_URL) throw new Error("Не задан MINI_APP_URL");
 
 const bot = new Telegraf(BOT_TOKEN);
 
-const STAR_PACKS = {
-  small: {
-    stars: 10,
-    crystals: 10,
-    title: "10 кристаллов"
-  },
-  medium: {
-    stars: 45,
-    crystals: 50,
-    title: "50 кристаллов"
-  },
-  large: {
-    stars: 80,
-    crystals: 100,
-    title: "100 кристаллов"
-  }
-};
-
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.PGSSLMODE === "disable"
+    ? false
+    : { rejectUnauthorized: false },
+  max: 10,
+  connectionTimeoutMillis: 10000
 });
 
-// ---------------- DATABASE ----------------
+app.use(express.json({ limit: "1mb" }));
+app.use(express.static(__dirname));
+
+const CATEGORIES = [
+  "Страшные истории",
+  "Представь, если…",
+  "Ночные правила",
+  "Тайны и загадки"
+];
+
+const PACKS = {
+  pack10: { stars: 10, crystals: 10, title: "10 кристаллов" },
+  pack50: { stars: 45, crystals: 50, title: "50 кристаллов" },
+  pack100: { stars: 80, crystals: 100, title: "100 кристаллов" }
+};
+
+const PROMPTS = require("./prompts.json");
+
+function validatePrompts() {
+  if (!Array.isArray(PROMPTS) || PROMPTS.length !== 396) {
+    throw new Error("prompts.json должен содержать ровно 396 промптов");
+  }
+
+  const counts = Object.fromEntries(
+    CATEGORIES.map(category => [
+      category,
+      PROMPTS.filter(p => p.category === category).length
+    ])
+  );
+
+  for (const category of CATEGORIES) {
+    if (counts[category] !== 99) {
+      throw new Error(`В категории ${category} должно быть 99 промптов`);
+    }
+
+    const free = PROMPTS.filter(
+      p => p.category === category && p.is_free === true
+    );
+
+    if (free.length !== 1) {
+      throw new Error(
+        `В категории ${category} должен быть ровно один бесплатный промпт`
+      );
+    }
+  }
+
+  for (const p of PROMPTS) {
+    if (
+      !p.title ||
+      !p.category ||
+      !p.full_prompt ||
+      !CATEGORIES.includes(p.category)
+    ) {
+      throw new Error("В prompts.json обнаружен некорректный промпт");
+    }
+
+    if (
+      typeof p.price !== "number" ||
+      p.price < 0 ||
+      !Number.isInteger(p.price)
+    ) {
+      throw new Error("Некорректная цена промпта");
+    }
+  }
+
+  console.log("Промпты проверены: 396, из них 4 бесплатных.");
+}
 
 async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       telegram_id BIGINT PRIMARY KEY,
       username TEXT,
-      balance INTEGER NOT NULL DEFAULT 0,
-      free_prompt_used BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      first_name TEXT NOT NULL DEFAULT '',
+      crystals INTEGER NOT NULL DEFAULT 0
+        CHECK (crystals >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS prompts (
-      id SERIAL PRIMARY KEY,
+      id INTEGER PRIMARY KEY,
       category TEXT NOT NULL,
       title TEXT NOT NULL,
-      full_prompt TEXT NOT NULL
+      description TEXT NOT NULL DEFAULT '',
+      full_prompt TEXT NOT NULL,
+      is_free BOOLEAN NOT NULL DEFAULT FALSE,
+      price INTEGER NOT NULL DEFAULT 1
+        CHECK (price >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS unlocks (
-      user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
-      prompt_id INTEGER REFERENCES prompts(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id)
+        ON DELETE CASCADE,
+      prompt_id INTEGER NOT NULL REFERENCES prompts(id)
+        ON DELETE CASCADE,
+      unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, prompt_id)
     );
 
     CREATE TABLE IF NOT EXISTS favorites (
-      user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
-      prompt_id INTEGER REFERENCES prompts(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id)
+        ON DELETE CASCADE,
+      prompt_id INTEGER NOT NULL REFERENCES prompts(id)
+        ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, prompt_id)
     );
 
     CREATE TABLE IF NOT EXISTS payments (
-      id SERIAL PRIMARY KEY,
-      user_id BIGINT REFERENCES users(telegram_id),
-      telegram_payment_charge_id TEXT UNIQUE,
-      invoice_payload TEXT UNIQUE,
-      amount INTEGER NOT NULL,
-      crystals INTEGER NOT NULL DEFAULT 0,
-      currency TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id)
+        ON DELETE CASCADE,
+      telegram_charge_id TEXT UNIQUE NOT NULL,
+      provider_charge_id TEXT,
+      stars INTEGER NOT NULL,
+      crystals INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'paid',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    ALTER TABLE payments
-    ADD COLUMN IF NOT EXISTS crystals INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_prompts_category
+      ON prompts(category);
+
+    CREATE INDEX IF NOT EXISTS idx_unlocks_user
+      ON unlocks(user_id, unlocked_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_favorites_user
+      ON favorites(user_id);
   `);
 
-  console.log("PostgreSQL подключён, таблицы готовы");
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (let i = 0; i < PROMPTS.length; i++) {
+      const p = PROMPTS[i];
+
+      await client.query(`
+        INSERT INTO prompts(
+          id, category, title, description,
+          full_prompt, is_free, price
+        )
+        VALUES($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT(id) DO UPDATE SET
+          category=EXCLUDED.category,
+          title=EXCLUDED.title,
+          description=EXCLUDED.description,
+          full_prompt=EXCLUDED.full_prompt,
+          is_free=EXCLUDED.is_free,
+          price=EXCLUDED.price
+      `, [
+        i + 1,
+        p.category,
+        p.title,
+        p.description || "",
+        p.full_prompt,
+        p.is_free,
+        p.is_free ? 0 : p.price
+      ]);
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  console.log("PostgreSQL подключена, промпты загружены.");
 }
 
-// ---------------- TELEGRAM AUTH ----------------
+/* Проверка подлинности Telegram Mini App */
 
-function verifyTelegram(initData) {
-  if (!initData) return null;
+function verifyTelegramData(initData) {
+  if (!initData || typeof initData !== "string") {
+    return null;
+  }
 
   const params = new URLSearchParams(initData);
-  const hash = params.get("hash");
+  const receivedHash = params.get("hash");
 
-  if (!hash) return null;
+  if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) {
+    return null;
+  }
 
   params.delete("hash");
 
-  const entries = [...params.entries()].sort(([a], [b]) =>
-    a.localeCompare(b)
-  );
-
-  const dataCheckString = entries
+  const dataCheckString = [...params.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join("\n");
 
@@ -127,569 +230,599 @@ function verifyTelegram(initData) {
   const calculatedHash = crypto
     .createHmac("sha256", secretKey)
     .update(dataCheckString)
-    .digest("hex");
+    .digest();
 
-  const a = Buffer.from(calculatedHash, "hex");
-  const b = Buffer.from(hash, "hex");
+  const receivedBuffer = Buffer.from(receivedHash, "hex");
 
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+  if (
+    calculatedHash.length !== receivedBuffer.length ||
+    !crypto.timingSafeEqual(calculatedHash, receivedBuffer)
+  ) {
     return null;
   }
 
   const authDate = Number(params.get("auth_date"));
 
-  if (!authDate || Date.now() / 1000 - authDate > 86400) {
+  if (
+    !Number.isFinite(authDate) ||
+    authDate <= 0 ||
+    Date.now() / 1000 - authDate > 86400 ||
+    authDate - Date.now() / 1000 > 60
+  ) {
     return null;
   }
 
   try {
-    return JSON.parse(params.get("user") || "null");
+    const user = JSON.parse(params.get("user") || "{}");
+    return Number.isSafeInteger(user.id) && user.id > 0
+      ? user
+      : null;
   } catch {
     return null;
   }
 }
 
-async function telegramAuth(req, res, next) {
-  const initData = req.headers["x-telegram-init-data"];
-  const user = verifyTelegram(initData);
-
-  if (!user || !user.id) {
-    return res.status(401).json({
-      error: "Не удалось подтвердить Telegram"
-    });
-  }
-
+async function authenticate(req, res, next) {
   try {
-    await pool.query(
-      `INSERT INTO users (telegram_id, username)
-       VALUES ($1, $2)
-       ON CONFLICT (telegram_id)
-       DO UPDATE SET username = EXCLUDED.username`,
-      [user.id, user.username || null]
+    const user = verifyTelegramData(
+      req.get("X-Telegram-Init-Data")
     );
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Откройте FRAME через Telegram"
+      });
+    }
+
+    await pool.query(`
+      INSERT INTO users(telegram_id, username, first_name)
+      VALUES($1,$2,$3)
+      ON CONFLICT(telegram_id) DO UPDATE SET
+        username=EXCLUDED.username,
+        first_name=EXCLUDED.first_name,
+        updated_at=NOW()
+    `, [
+      user.id,
+      user.username || null,
+      user.first_name || ""
+    ]);
 
     req.telegramUser = user;
     next();
   } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      error: "Ошибка базы данных"
-    });
+    next(error);
   }
 }
 
-// ---------------- HEALTH ----------------
+/* Проверка сервера */
 
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({
-    status: "ok",
+    ok: true,
     service: "FRAME"
   });
 });
 
-// ---------------- PROFILE ----------------
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
-app.get("/api/me", telegramAuth, async (req, res) => {
+/* Профиль */
+
+app.get("/api/me", authenticate, async (req, res, next) => {
   try {
-    const result = await pool.query(
-      `SELECT telegram_id, username, balance,
-              free_prompt_used, created_at
-       FROM users
-       WHERE telegram_id = $1`,
-      [req.telegramUser.id]
-    );
+    const id = req.telegramUser.id;
+
+    const user = await pool.query(`
+      SELECT telegram_id, username, first_name, crystals
+      FROM users
+      WHERE telegram_id=$1
+    `, [id]);
+
+    const opened = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM unlocks
+      WHERE user_id=$1
+    `, [id]);
 
     res.json({
-      user: result.rows[0]
+      user: user.rows[0],
+      opened: opened.rows[0].count
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка профиля" });
+    next(error);
   }
 });
 
-// ---------------- CATEGORIES ----------------
+/* Каталог */
 
-app.get("/api/categories", telegramAuth, async (req, res) => {
+app.get("/api/prompts", authenticate, async (req, res, next) => {
   try {
-    const result = await pool.query(
-      `SELECT category, COUNT(*)::int AS count
-       FROM prompts
-       GROUP BY category
-       ORDER BY category`
-    );
+    const values = [req.telegramUser.id];
+    let conditions = "";
+
+    if (req.query.category) {
+      if (!CATEGORIES.includes(req.query.category)) {
+        return res.status(400).json({
+          error: "Неизвестная категория"
+        });
+      }
+
+      values.push(req.query.category);
+      conditions += ` AND p.category=$${values.length}`;
+    }
+
+    const search = String(req.query.q || "").trim().slice(0, 100);
+
+    if (search) {
+      values.push(`%${search}%`);
+      conditions += `
+        AND (
+          p.title ILIKE $${values.length}
+          OR p.description ILIKE $${values.length}
+        )
+      `;
+    }
+
+    const result = await pool.query(`
+      SELECT
+        p.id,p.category,p.title,p.description,
+        p.is_free,p.price,
+        (
+          p.is_free OR EXISTS(
+            SELECT 1 FROM unlocks u
+            WHERE u.user_id=$1 AND u.prompt_id=p.id
+          )
+        ) AS unlocked,
+        EXISTS(
+          SELECT 1 FROM favorites f
+          WHERE f.user_id=$1 AND f.prompt_id=p.id
+        ) AS favorite
+      FROM prompts p
+      WHERE TRUE ${conditions}
+      ORDER BY p.id
+    `, values);
 
     res.json({
-      categories: result.rows
+      prompts: result.rows,
+      categories: CATEGORIES
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка категорий" });
+    next(error);
   }
 });
 
-// ---------------- PROMPTS ----------------
+/* Получение полного текста */
 
-app.get("/api/prompts", telegramAuth, async (req, res) => {
-  try {
-    const category = req.query.category;
-    const search = req.query.search || "";
-
-    const result = await pool.query(
-      `SELECT id, category, title
-       FROM prompts
-       WHERE ($1::text IS NULL OR category = $1)
-         AND title ILIKE $2
-       ORDER BY id`,
-      [category || null, `%${search}%`]
-    );
-
-    res.json({
-      prompts: result.rows
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка каталога" });
-  }
-});
-
-app.get("/api/prompts/:id", telegramAuth, async (req, res) => {
+app.get("/api/prompt/:id", authenticate, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id) || id < 1) {
-      return res.status(400).json({ error: "Неверный ID" });
+      return res.status(400).json({
+        error: "Неверный номер промпта"
+      });
     }
 
-    const result = await pool.query(
-      `SELECT p.id, p.category, p.title,
-         CASE
-           WHEN u.prompt_id IS NOT NULL
-                OR usr.free_prompt_used = FALSE
-           THEN p.full_prompt
-           ELSE NULL
-         END AS full_prompt,
-         (u.prompt_id IS NOT NULL) AS unlocked
-       FROM prompts p
-       CROSS JOIN users usr
-       LEFT JOIN unlocks u
-         ON u.prompt_id = p.id
-        AND u.user_id = usr.telegram_id
-       WHERE p.id = $1
-         AND usr.telegram_id = $2`,
-      [id, req.telegramUser.id]
-    );
+    const result = await pool.query(`
+      SELECT p.*
+      FROM prompts p
+      WHERE p.id=$2
+      AND (
+        p.is_free OR EXISTS(
+          SELECT 1 FROM unlocks u
+          WHERE u.user_id=$1 AND u.prompt_id=p.id
+        )
+      )
+    `, [req.telegramUser.id, id]);
 
-    if (!result.rows.length) {
+    if (!result.rowCount) {
+      return res.status(403).json({
+        error: "Промпт не открыт или не существует"
+      });
+    }
+
+    res.json({ prompt: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/* Покупка промпта */
+
+app.post("/api/unlock", authenticate, async (req, res, next) => {
+  const promptId = Number(req.body.promptId);
+
+  if (!Number.isInteger(promptId) || promptId < 1) {
+    return res.status(400).json({
+      error: "Неверный номер промпта"
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const prompt = await client.query(`
+      SELECT id,is_free,price
+      FROM prompts
+      WHERE id=$1
+      FOR SHARE
+    `, [promptId]);
+
+    if (!prompt.rowCount) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         error: "Промпт не найден"
       });
     }
 
-    res.json({
-      prompt: result.rows[0]
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка промпта" });
-  }
-});
-
-// ---------------- UNLOCK PROMPT ----------------
-
-app.post("/api/prompts/:id/unlock", telegramAuth, async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const userId = req.telegramUser.id;
-    const promptId = Number(req.params.id);
-
-    if (!Number.isInteger(promptId) || promptId < 1) {
-      throw new Error("Неверный ID промпта");
-    }
-
-    const prompt = await client.query(
-      "SELECT id FROM prompts WHERE id = $1",
-      [promptId]
-    );
-
-    if (!prompt.rowCount) {
-      throw new Error("Промпт не найден");
-    }
-
-    const already = await client.query(
-      `SELECT 1 FROM unlocks
-       WHERE user_id = $1 AND prompt_id = $2`,
-      [userId, promptId]
-    );
+    const already = await client.query(`
+      SELECT 1 FROM unlocks
+      WHERE user_id=$1 AND prompt_id=$2
+    `, [req.telegramUser.id, promptId]);
 
     if (already.rowCount) {
       await client.query("COMMIT");
 
+      const balance = await pool.query(
+        "SELECT crystals FROM users WHERE telegram_id=$1",
+        [req.telegramUser.id]
+      );
+
       return res.json({
-        success: true,
-        message: "Уже открыт"
+        ok: true,
+        already: true,
+        crystals: balance.rows[0].crystals
       });
     }
 
-    const user = await client.query(
-      `SELECT balance, free_prompt_used
-       FROM users
-       WHERE telegram_id = $1
-       FOR UPDATE`,
-      [userId]
-    );
+    const price = prompt.rows[0].is_free
+      ? 0
+      : prompt.rows[0].price;
+
+    const user = await client.query(`
+      SELECT crystals
+      FROM users
+      WHERE telegram_id=$1
+      FOR UPDATE
+    `, [req.telegramUser.id]);
 
     if (!user.rowCount) {
-      throw new Error("Пользователь не найден");
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        error: "Пользователь не найден"
+      });
     }
 
-    if (!user.rows[0].free_prompt_used) {
-      await client.query(
-        `UPDATE users
-         SET free_prompt_used = TRUE
-         WHERE telegram_id = $1`,
-        [userId]
-      );
-    } else {
-      if (user.rows[0].balance < 1) {
-        await client.query("ROLLBACK");
-
-        return res.status(400).json({
-          error: "Недостаточно кристаллов"
-        });
-      }
-
-      await client.query(
-        `UPDATE users
-         SET balance = balance - 1
-         WHERE telegram_id = $1`,
-        [userId]
-      );
+    if (user.rows[0].crystals < price) {
+      await client.query("ROLLBACK");
+      return res.status(402).json({
+        error: "Недостаточно кристаллов"
+      });
     }
 
-    await client.query(
-      `INSERT INTO unlocks (user_id, prompt_id)
-       VALUES ($1, $2)`,
-      [userId, promptId]
-    );
+    if (price > 0) {
+      await client.query(`
+        UPDATE users
+        SET crystals=crystals-$2,updated_at=NOW()
+        WHERE telegram_id=$1
+      `, [req.telegramUser.id, price]);
+    }
+
+    await client.query(`
+      INSERT INTO unlocks(user_id,prompt_id)
+      VALUES($1,$2)
+      ON CONFLICT DO NOTHING
+    `, [req.telegramUser.id, promptId]);
 
     const updated = await client.query(
-      `SELECT balance FROM users
-       WHERE telegram_id = $1`,
-      [userId]
+      "SELECT crystals FROM users WHERE telegram_id=$1",
+      [req.telegramUser.id]
     );
 
     await client.query("COMMIT");
 
     res.json({
-      success: true,
-      balance: updated.rows[0].balance
+      ok: true,
+      crystals: updated.rows[0].crystals
     });
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
-
-    res.status(400).json({
-      error: error.message
-    });
+    await client.query("ROLLBACK");
+    next(error);
   } finally {
     client.release();
   }
 });
 
-// ---------------- FAVORITES ----------------
+/* Избранное */
 
-app.get("/api/favorites", telegramAuth, async (req, res) => {
+app.get("/api/favorites", authenticate, async (req, res, next) => {
   try {
-    const result = await pool.query(
-      `SELECT p.id, p.category, p.title
-       FROM favorites f
-       JOIN prompts p ON p.id = f.prompt_id
-       WHERE f.user_id = $1
-       ORDER BY f.created_at DESC`,
-      [req.telegramUser.id]
-    );
+    const result = await pool.query(`
+      SELECT
+        p.id,p.category,p.title,p.description,
+        p.is_free,p.price,
+        (
+          p.is_free OR EXISTS(
+            SELECT 1 FROM unlocks u
+            WHERE u.user_id=$1 AND u.prompt_id=p.id
+          )
+        ) AS unlocked,
+        TRUE AS favorite
+      FROM favorites f
+      JOIN prompts p ON p.id=f.prompt_id
+      WHERE f.user_id=$1
+      ORDER BY f.created_at DESC
+    `, [req.telegramUser.id]);
 
-    res.json({
-      favorites: result.rows
-    });
+    res.json({ prompts: result.rows });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка избранного" });
+    next(error);
   }
 });
 
-app.post("/api/favorites/:id", telegramAuth, async (req, res) => {
+app.post("/api/favorites/:id", authenticate, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id) || id < 1) {
-      return res.status(400).json({ error: "Неверный ID" });
+      return res.status(400).json({
+        error: "Неверный номер промпта"
+      });
     }
 
-    await pool.query(
-      `INSERT INTO favorites (user_id, prompt_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [req.telegramUser.id, id]
+    const prompt = await pool.query(
+      "SELECT id FROM prompts WHERE id=$1",
+      [id]
     );
 
-    res.json({ success: true });
+    if (!prompt.rowCount) {
+      return res.status(404).json({
+        error: "Промпт не найден"
+      });
+    }
+
+    const deleted = await pool.query(`
+      DELETE FROM favorites
+      WHERE user_id=$1 AND prompt_id=$2
+      RETURNING prompt_id
+    `, [req.telegramUser.id, id]);
+
+    let favorite = false;
+
+    if (!deleted.rowCount) {
+      await pool.query(`
+        INSERT INTO favorites(user_id,prompt_id)
+        VALUES($1,$2)
+        ON CONFLICT DO NOTHING
+      `, [req.telegramUser.id, id]);
+
+      favorite = true;
+    }
+
+    res.json({ favorite });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка избранного" });
+    next(error);
   }
 });
 
-app.delete("/api/favorites/:id", telegramAuth, async (req, res) => {
-  try {
-    await pool.query(
-      `DELETE FROM favorites
-       WHERE user_id = $1 AND prompt_id = $2`,
-      [req.telegramUser.id, Number(req.params.id)]
-    );
+/* История */
 
-    res.json({ success: true });
+app.get("/api/history", authenticate, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        p.id,p.category,p.title,p.description,
+        p.is_free,p.price,TRUE AS unlocked
+      FROM unlocks u
+      JOIN prompts p ON p.id=u.prompt_id
+      WHERE u.user_id=$1
+      ORDER BY u.unlocked_at DESC
+    `, [req.telegramUser.id]);
+
+    res.json({ prompts: result.rows });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Ошибка избранного" });
+    next(error);
   }
 });
 
-// ---------------- TELEGRAM STARS INVOICE ----------------
+/* Создание платежа Telegram Stars */
 
-app.post("/api/stars/invoice", telegramAuth, async (req, res) => {
-  const pack = STAR_PACKS[req.body?.pack];
-
-  if (!pack) {
-    return res.status(400).json({
-      error: "Неизвестный пакет"
-    });
-  }
-
-  const payload =
-    `frame_${req.telegramUser.id}_${crypto.randomUUID()}`;
-
+app.post("/api/stars/invoice", authenticate, async (req, res, next) => {
   try {
-    await pool.query(
-      `INSERT INTO payments
-       (user_id, invoice_payload, amount, crystals, currency, status)
-       VALUES ($1, $2, $3, $4, 'XTR', 'pending')`,
-      [
-        req.telegramUser.id,
-        payload,
-        pack.stars,
-        pack.crystals
-      ]
-    );
+    const pack = PACKS[req.body.pack];
 
-    const invoiceUrl = await bot.telegram.createInvoiceLink(
-      pack.title,
-      `Пополнение баланса FRAME: ${pack.crystals} кристаллов`,
+    if (!pack) {
+      return res.status(400).json({
+        error: "Неизвестный набор кристаллов"
+      });
+    }
+
+    const payload = [
+      "frame",
+      req.telegramUser.id,
+      req.body.pack,
+      crypto.randomUUID()
+    ].join(":");
+
+    const url = await bot.telegram.createInvoiceLink({
+      title: pack.title,
+      description: `Пополнение баланса FRAME: ${pack.crystals} кристаллов`,
       payload,
-      "",
-      "XTR",
-      [
+      provider_token: "",
+      currency: "XTR",
+      prices: [
         {
           label: pack.title,
           amount: pack.stars
         }
       ]
-    );
-
-    res.json({
-      invoice_url: invoiceUrl
     });
+
+    res.json({ url });
   } catch (error) {
-    console.error("Ошибка создания счёта:", error);
-
-    await pool.query(
-      `DELETE FROM payments
-       WHERE invoice_payload = $1
-         AND status = 'pending'`,
-      [payload]
-    ).catch(() => {});
-
-    res.status(500).json({
-      error: "Не удалось создать счёт. Попробуй ещё раз."
-    });
+    next(error);
   }
 });
 
-// ---------------- STATIC FILES ----------------
-
-app.use(express.static(path.join(__dirname)));
-
-// ---------------- TELEGRAM BOT ----------------
-
-bot.start(async (ctx) => {
-  await ctx.reply(
-    "🌌 Добро пожаловать в FRAME!\n\nТвоя библиотека видеопромптов ждёт тебя.",
-    Markup.inlineKeyboard([
-      Markup.button.webApp("🚀 Открыть FRAME", MINI_APP_URL)
-    ])
-  );
-});
-
-// ---------------- PRE-CHECKOUT ----------------
+/* Проверка платежа до оплаты */
 
 bot.on("pre_checkout_query", async (ctx) => {
-  const query = ctx.update.pre_checkout_query;
-
   try {
-    const result = await pool.query(
-      `SELECT id
-       FROM payments
-       WHERE invoice_payload = $1
-         AND user_id = $2
-         AND amount = $3
-         AND currency = $4
-         AND status = 'pending'`,
-      [
-        query.invoice_payload,
-        query.from.id,
-        query.total_amount,
-        query.currency
-      ]
-    );
+    const query = ctx.update.pre_checkout_query;
+    const parts = String(query.invoice_payload || "").split(":");
+    const pack = PACKS[parts[2]];
 
-    if (!result.rowCount) {
-      return ctx.answerPreCheckoutQuery(
-        false,
-        "Счёт не найден или уже использован. Создай новый."
-      );
-    }
-
-    await ctx.answerPreCheckoutQuery(true);
-  } catch (error) {
-    console.error("Ошибка проверки платежа:", error);
+    const valid =
+      parts.length === 4 &&
+      parts[0] === "frame" &&
+      Number(parts[1]) === query.from.id &&
+      pack &&
+      query.currency === "XTR" &&
+      query.total_amount === pack.stars;
 
     await ctx.answerPreCheckoutQuery(
-      false,
-      "Не удалось проверить платёж. Попробуй позже."
+      Boolean(valid),
+      valid ? undefined : "Не удалось проверить платёж"
     );
+  } catch (error) {
+    console.error("Ошибка проверки платежа:", error);
   }
 });
 
-// ---------------- SUCCESSFUL PAYMENT ----------------
+/* Начисление после успешной оплаты */
 
-bot.on("successful_payment", async (ctx) => {
+bot.on("message", async (ctx) => {
   const payment = ctx.message.successful_payment;
+
+  if (!payment) return;
+
+  const parts = String(payment.invoice_payload || "").split(":");
+
+  if (parts.length !== 4 || parts[0] !== "frame") return;
+
+  const userId = Number(parts[1]);
+  const pack = PACKS[parts[2]];
+
+  if (
+    !pack ||
+    userId !== ctx.from.id ||
+    payment.currency !== "XTR" ||
+    payment.total_amount !== pack.stars
+  ) {
+    console.error("Некорректные данные платежа");
+    return;
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    const result = await client.query(
-      `SELECT *
-       FROM payments
-       WHERE invoice_payload = $1
-       FOR UPDATE`,
-      [payment.invoice_payload]
-    );
+    const inserted = await client.query(`
+      INSERT INTO payments(
+        user_id,telegram_charge_id,
+        provider_charge_id,stars,crystals
+      )
+      VALUES($1,$2,$3,$4,$5)
+      ON CONFLICT(telegram_charge_id) DO NOTHING
+      RETURNING id
+    `, [
+      userId,
+      payment.telegram_payment_charge_id,
+      payment.provider_payment_charge_id || null,
+      pack.stars,
+      pack.crystals
+    ]);
 
-    if (!result.rowCount) {
-      throw new Error("Платёж не найден в базе");
+    if (inserted.rowCount) {
+      await client.query(`
+        UPDATE users
+        SET crystals=crystals+$2,updated_at=NOW()
+        WHERE telegram_id=$1
+      `, [userId, pack.crystals]);
     }
-
-    const record = result.rows[0];
-
-    // Проверяем владельца и данные платежа
-    if (String(record.user_id) !== String(ctx.from.id)) {
-      throw new Error("Пользователь платежа не совпадает");
-    }
-
-    if (
-      payment.currency !== "XTR" ||
-      payment.total_amount !== record.amount
-    ) {
-      throw new Error("Данные платежа не совпадают");
-    }
-
-    // Защита от повторного начисления
-    if (record.status === "paid") {
-      await client.query("COMMIT");
-      return;
-    }
-
-    if (record.status !== "pending") {
-      throw new Error("Платёж не ожидает подтверждения");
-    }
-
-    const updatedUser = await client.query(
-      `UPDATE users
-       SET balance = balance + $1
-       WHERE telegram_id = $2
-       RETURNING balance`,
-      [record.crystals, record.user_id]
-    );
-
-    if (!updatedUser.rowCount) {
-      throw new Error("Пользователь не найден");
-    }
-
-    await client.query(
-      `UPDATE payments
-       SET status = 'paid',
-           telegram_payment_charge_id = $1
-       WHERE id = $2`,
-      [
-        payment.telegram_payment_charge_id,
-        record.id
-      ]
-    );
 
     await client.query("COMMIT");
 
-    await ctx.reply(
-      `💎 Оплата прошла успешно!\n\n` +
-      `Начислено: ${record.crystals} кристаллов.\n` +
-      `Баланс: ${updatedUser.rows[0].balance} кристаллов.\n\n` +
-      `Кристаллы уже доступны в FRAME!`
-    );
-
-    console.log(
-      `FRAME: пользователь ${record.user_id}, ` +
-      `начислено ${record.crystals} кристаллов`
-    );
+    if (inserted.rowCount) {
+      await ctx.reply(
+        `✨ Оплата прошла успешно!\n\n💎 Начислено: ${pack.crystals} кристаллов.`
+      );
+    }
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
-
-    console.error("Ошибка обработки оплаты:", error);
-
-    await ctx.reply(
-      "Платёж получен, но возникла ошибка начисления. Обратись в поддержку FRAME."
-    );
+    await client.query("ROLLBACK");
+    console.error("Ошибка начисления кристаллов:", error);
   } finally {
     client.release();
   }
 });
 
-// ---------------- ERROR HANDLING ----------------
+/* Команды Telegram */
 
-bot.catch((error) => {
-  console.error("Ошибка Telegram:", error);
+bot.start(async (ctx) => {
+  await ctx.reply(
+    "✨ Добро пожаловать в FRAME!\n\nТвой магазин готовых промптов.\n\n💎 Открывай идеи, сохраняй любимые и создавай истории!",
+    Markup.inlineKeyboard([
+      [
+        Markup.button.webApp(
+          "✨ Открыть FRAME",
+          MINI_APP_URL
+        )
+      ]
+    ])
+  );
 });
 
-// ---------------- START SERVER ----------------
+bot.command("app", async (ctx) => {
+  await ctx.reply(
+    "Открывай магазин FRAME:",
+    Markup.inlineKeyboard([
+      [
+        Markup.button.webApp(
+          "✨ Открыть магазин",
+          MINI_APP_URL
+        )
+      ]
+    ])
+  );
+});
 
-async function start() {
+/* Обработка ошибок */
+
+app.use((error, req, res, next) => {
+  console.error("Server error:", error);
+
+  if (res.headersSent) return next(error);
+
+  res.status(500).json({
+    error: "Внутренняя ошибка сервера"
+  });
+});
+
+/* Запуск */
+
+async function main() {
+  validatePrompts();
   await initDatabase();
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`FRAME запущен на порту ${PORT}`);
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`FRAME server started on port ${PORT}`);
   });
 
-  await bot.launch();
-
-  console.log("Telegram-бот запущен");
+  try {
+    await bot.launch();
+    console.log("FRAME Telegram bot started");
+  } catch (error) {
+    server.close();
+    throw error;
+  }
 }
 
-start().catch((error) => {
-  console.error("Ошибка запуска:", error);
+main().catch(error => {
+  console.error("FRAME startup error:", error);
   process.exit(1);
 });
 
