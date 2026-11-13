@@ -83,15 +83,58 @@ button{cursor:pointer;color:inherit}
 .empty{text-align:center;padding:35px 15px;color:var(--muted)}
 .toast{position:fixed;z-index:20;bottom:100px;left:50%;transform:translateX(-50%);background:#242b3b;border:1px solid #46516a;border-radius:12px;padding:11px 16px;display:none;max-width:90%;text-align:center}
 .toast.show{display:block}
+
+/* FRAME — liquid glass visual system */
+:root{--bg:#080711;--panel:rgba(255,255,255,.075);--panel2:rgba(255,255,255,.11);--line:rgba(226,211,255,.19);--muted:#aaa2c2;--text:#fbf8ff;--gold:#e8d7ff;--violet:#b99aff;--cyan:#8ce8ff}
+html{background:#080711}
+body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),radial-gradient(ellipse at 92% 25%,#3c7c9c35,transparent 34%),linear-gradient(145deg,#090713,#101020 55%,#090b17);background-attachment:fixed}
+.brand span{background:linear-gradient(120deg,#fff,#c5a5ff 48%,#83e9ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.balance,.hero,.cat,.prompt,.profilebox,.sheet,.pack,.search,.bottom{background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.035));border-color:rgba(225,205,255,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 14px 38px rgba(0,0,0,.22);backdrop-filter:blur(22px) saturate(145%);-webkit-backdrop-filter:blur(22px) saturate(145%)}
+.hero{border-radius:30px;background:radial-gradient(ellipse at 80% 0%,#c3a4ff44,transparent 45%),linear-gradient(135deg,rgba(171,133,255,.22),rgba(94,211,240,.08),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 #ffffff45,0 22px 65px #0006;animation:heroFloat 8s ease-in-out infinite}
+.hero h1{background:linear-gradient(100deg,#fff 5%,#d9c7ff 48%,#9cecff 95%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 35px #b99aff22}
+.eyebrow{color:#d9c7ff}
+.search{color:white}
+.search:focus{border-color:#c3a5ff;box-shadow:0 0 0 3px #b99aff20,0 12px 30px #0004}
+.cat,.prompt,.profilebox,.pack{transition:transform .35s cubic-bezier(.2,.8,.2,1),border-color .35s,box-shadow .35s}
+.cat:hover,.prompt:hover,.pack:hover{transform:translateY(-3px);border-color:#c7aaff66;box-shadow:inset 0 1px 0 #ffffff35,0 16px 38px #0005}
+.cat.active{background:linear-gradient(135deg,#b99aff35,#8ce8ff12);border-color:#c7aaffaa}
+.picon{background:linear-gradient(145deg,#c3a4ff38,#83e9ff18);border:1px solid #ffffff20;box-shadow:inset 0 1px 0 #ffffff35}
+.price{color:#e5d4ff}
+.bottom{background:rgba(13,10,25,.72);border-top:1px solid #d9c7ff2c}
+.nav button.active{background:linear-gradient(145deg,#b99aff36,#83e9ff13);border-color:#d5c2ff65;box-shadow:inset 0 1px 0 #ffffff38,0 7px 24px #0005}
+.action{background:linear-gradient(110deg,#e4d6ff,#b99aff 52%,#8ce8ff);box-shadow:0 8px 28px #a77cff35,inset 0 1px 0 #fff;color:#171126;transition:transform .2s,filter .2s}
+.action:active{transform:scale(.985);filter:brightness(1.08)}
+.secondary{background:rgba(255,255,255,.09);color:#f7efff;border:1px solid #ffffff20;box-shadow:inset 0 1px 0 #ffffff20}
+.sheet{background:linear-gradient(145deg,rgba(34,26,54,.97),rgba(14,16,31,.97));border-color:#c7aaff45}
+.toast{background:rgba(35,27,55,.92);border-color:#c7aaff66;backdrop-filter:blur(20px)}
+@keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes liquidShine{0%{transform:translateX(-120%) rotate(15deg)}100%{transform:translateX(220%) rotate(15deg)}}
+.glass-welcome{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#8b62c655,transparent 38%),linear-gradient(145deg,#080711,#151025 58%,#080b16);animation:welcomeOut .9s ease 2.55s forwards;pointer-events:none}
+.glass-welcome:before,.glass-welcome:after{content:"";position:absolute;width:65vw;height:65vw;max-width:460px;max-height:460px;border-radius:42%;border:1px solid #e5d4ff35;box-shadow:inset 0 0 75px #bb9aff18,0 0 90px #9b72ff18;filter:blur(.2px);animation:orb 8s ease-in-out infinite}
+.glass-welcome:after{width:45vw;height:45vw;border-color:#9cecff35;animation-delay:-3s;animation-direction:reverse}
+.welcome-copy{position:relative;text-align:center;padding:32px 25px;border:1px solid #ffffff38;border-radius:34px;background:linear-gradient(135deg,#ffffff25,#ffffff08 55%,#b99aff18);box-shadow:inset 0 1px 0 #ffffff70,inset 0 -1px 0 #ffffff12,0 30px 90px #0008,0 0 65px #a77cff25;backdrop-filter:blur(30px) saturate(160%);-webkit-backdrop-filter:blur(30px) saturate(160%);overflow:hidden;animation:welcomeIn 1s cubic-bezier(.2,.85,.25,1) both}
+.welcome-copy:after{content:"";position:absolute;top:-70%;left:-35%;width:35%;height:240%;background:linear-gradient(90deg,transparent,#ffffff55,transparent);transform:rotate(18deg);animation:liquidShine 2.5s ease-in-out .25s both}
+.welcome-title{font-size:clamp(27px,7vw,42px);font-weight:850;letter-spacing:-1.5px;background:linear-gradient(105deg,#fff 5%,#dfcaff 42%,#a8efff 75%,#fff);background-size:220% auto;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 5px 22px #bd9aff55);animation:titleGlow 3s ease-in-out infinite}
+.welcome-sub{margin-top:12px;color:#e2d8f5a8;font-size:10px;letter-spacing:5px;font-weight:800}
+.welcome-dot{width:6px;height:6px;border-radius:50%;background:#c9b1ff;box-shadow:0 0 16px #c9b1ff;display:inline-block;margin:22px 4px 0;animation:dotPulse 1s ease-in-out infinite alternate}
+.welcome-dot:nth-child(2){animation-delay:.2s}.welcome-dot:nth-child(3){animation-delay:.4s}
+@keyframes welcomeIn{from{opacity:0;transform:translateY(24px) scale(.88);filter:blur(12px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes welcomeOut{to{opacity:0;visibility:hidden}}
+@keyframes orb{0%,100%{transform:rotate(0deg) scale(.92);border-radius:42%}50%{transform:rotate(180deg) scale(1.08);border-radius:48%}}
+@keyframes titleGlow{0%,100%{background-position:0% center}50%{background-position:100% center}}
+@keyframes dotPulse{from{opacity:.25;transform:translateY(0)}to{opacity:1;transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+
 </style>
 </head>
 <body>
+<div class="glass-welcome" aria-label="Добро пожаловать в FRAME"><div class="welcome-copy"><div class="welcome-title">Добро пожаловать</div><div class="welcome-sub">FRAME · PROMPT STORE</div><span class="welcome-dot"></span><span class="welcome-dot"></span><span class="welcome-dot"></span></div></div>
 <div class="wrap">
  <header class="top"><div class="brand">FR<span>A</span>ME</div><button class="balance" onclick="openShop()">✧ <b id="balance">0</b></button></header>
  <main id="home" class="page active">
   <section class="hero"><div class="eyebrow">YOUR CREATIVE SPACE</div><h1>Идеи, которые<br>цепляют.</h1><p>Открывай готовые промпты для историй, загадок и необычных сценариев.</p></section>
   <input id="search" class="search" placeholder="⌕  Найти промпт..." oninput="searchPrompts(this.value)">
-  <div class="section-head"><h2>Категории</h2><span class="muted">4 коллекции</span></div>
+  <div class="section-head"><h2>Категории</h2><span class="muted">396 промптов · 4 коллекции</span></div>
   <div id="categories" class="categories"></div>
   <div class="section-head"><h2 id="listTitle">Популярные промпты</h2><span class="muted" id="listCount"></span></div>
   <div id="promptList" class="list"></div>
