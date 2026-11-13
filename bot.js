@@ -148,6 +148,9 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE prompts
+      ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+
     ALTER TABLE unlocks
       ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
