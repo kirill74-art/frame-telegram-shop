@@ -816,21 +816,37 @@ app.use((error, req, res, next) => {
 
 /* Запуск */
 
+async function startBotWithRetry() {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      await bot.launch();
+      console.log("FRAME Telegram bot started");
+      return;
+    } catch (error) {
+      attempt += 1;
+      const delay = Math.min(30000, 5000 * attempt);
+      console.error(
+        `Telegram API connection failed (attempt ${attempt}). Retrying in ${delay / 1000}s:`,
+        error.message
+      );
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
 async function main() {
   validatePrompts();
   await initDatabase();
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`FRAME server started on port ${PORT}`);
   });
 
-  try {
-    await bot.launch();
-    console.log("FRAME Telegram bot started");
-  } catch (error) {
-    server.close();
-    throw error;
-  }
+  startBotWithRetry().catch(error => {
+    console.error("Telegram retry loop failed:", error);
+  });
 }
 
 main().catch(error => {
