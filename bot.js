@@ -107,6 +107,34 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS crystals INTEGER NOT NULL DEFAULT 0 CHECK (crystals >= 0),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS legacy_balance_migrated BOOLEAN NOT NULL DEFAULT FALSE;
+
+    DO $migrate$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'users'
+          AND column_name = 'balance'
+      ) THEN
+        UPDATE users
+        SET crystals = GREATEST(balance, 0),
+            legacy_balance_migrated = TRUE
+        WHERE legacy_balance_migrated = FALSE;
+      ELSE
+        UPDATE users
+        SET legacy_balance_migrated = TRUE
+        WHERE legacy_balance_migrated = FALSE;
+      END IF;
+    END $migrate$;
+
+    ALTER TABLE users
+      ALTER COLUMN legacy_balance_migrated SET DEFAULT TRUE;
+
     CREATE TABLE IF NOT EXISTS prompts (
       id INTEGER PRIMARY KEY,
       category TEXT NOT NULL,
