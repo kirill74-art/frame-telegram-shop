@@ -34,6 +34,12 @@ button{cursor:pointer;color:inherit}
 .cat strong{display:block;margin:11px 0 4px;font-size:14px}
 .cat small{color:var(--muted)}
 .cat.active{border-color:#9b8cff;box-shadow:0 0 0 1px #9b8cff33}
+.cat{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+.cat:focus-visible{outline:2px solid #d4c2ff;outline-offset:3px}
+.cat-arrow{position:absolute;right:13px;top:13px;color:#cbb7ff;font-size:15px;opacity:.7}
+.cat.active .cat-arrow{opacity:1;transform:translate(2px,-2px)}
+#promptList{scroll-margin-top:18px}
+.empty button{max-width:100%}
 .list{display:grid;gap:10px}
 .prompt{display:flex;align-items:center;gap:12px;text-align:left;width:100%;min-width:0;max-width:100%;overflow:hidden;padding:14px;border-radius:17px;border:1px solid var(--line);background:var(--panel)}
 .picon{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:13px;background:#24243a;font-size:20px}
@@ -176,7 +182,7 @@ let allPrompts=[],currentCategory="",me=null,searchTimer=null,searchRequest=0;
 function toast(s){const t=document.getElementById("toast");t.textContent=s;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
 async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers,...opts.headers}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||"Ошибка запроса");return d}
 function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>{x.classList.remove("active");x.removeAttribute("aria-current")});btn?.classList.add("active");btn?.setAttribute("aria-current","page");if(id==="favorites")loadCollection("favorites","favoritesList");if(id==="history")loadCollection("history","historyList")}
-function renderCategories(){document.getElementById("categories").innerHTML=catData.map(([n,e,d])=>`<button class="cat ${currentCategory===n?"active":""}" onclick="selectCategory(${JSON.stringify(n)})"><span class="emoji">${e}</span><strong>${n}</strong><small>${d}</small></button>`).join("")}
+function renderCategories(){const root=document.getElementById("categories");root.innerHTML=catData.map(([n,e,d],i)=>`<button type="button" class="cat ${currentCategory===n?"active":""}" data-category-index="${i}" aria-pressed="${currentCategory===n}" aria-label="Открыть категорию ${escapeHtml(n)}"><span class="emoji">${e}</span><strong>${escapeHtml(n)}</strong><small>${escapeHtml(d)}</small><span class="cat-arrow" aria-hidden="true">↗</span></button>`).join("");root.querySelectorAll("[data-category-index]").forEach(button=>button.addEventListener("click",()=>{const item=catData[Number(button.dataset.categoryIndex)];if(item)selectCategory(item[0])}))}
 async function loadPrompts(category="",q=""){
  const request=++searchRequest;
  const list=document.getElementById("promptList");
@@ -203,8 +209,8 @@ async function loadPrompts(category="",q=""){
 }
 function renderList(items,target){const el=document.getElementById(target);if(!items.length){el.innerHTML='<div class="empty">Здесь пока ничего нет</div>';return}el.innerHTML=items.map(p=>`<button class="prompt" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="price ${p.is_free?"free":""}">${p.unlocked?"Открыт":p.is_free?"Бесплатно":"✧ "+p.price}</span></button>`).join("")}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function selectCategory(c){currentCategory=currentCategory===c?"":c;renderCategories();document.getElementById("listTitle").textContent=currentCategory||"Популярные промпты";loadPrompts(currentCategory,document.getElementById("search").value);document.getElementById("promptList").scrollIntoView({behavior:"smooth",block:"start"})}
-function searchPrompts(q){clearTimeout(searchTimer);++searchRequest;searchTimer=setTimeout(()=>loadPrompts(currentCategory,q),220)}
+function selectCategory(c){if(!catData.some(item=>item[0]===c))return;currentCategory=c;const search=document.getElementById("search");if(search)search.value="";++searchRequest;renderCategories();document.getElementById("listTitle").textContent=c;document.getElementById("listCount").textContent="99 промптов";loadPrompts(c,"");requestAnimationFrame(()=>document.getElementById("promptList").scrollIntoView({behavior:"smooth",block:"start"}))}
+function searchPrompts(q){clearTimeout(searchTimer);++searchRequest;searchTimer=setTimeout(()=>{loadPrompts(currentCategory,q);document.getElementById("listTitle").textContent=currentCategory?currentCategory+" · поиск":"Результаты поиска"},220)}
 function openModal(html){document.getElementById("sheet").innerHTML=html;document.getElementById("modal").classList.add("show")}
 function closeModal(){document.getElementById("modal").classList.remove("show")}
 async function openPrompt(id){try{let p=allPrompts.find(x=>x.id===id);if(!p){const d=await api("/api/prompt/"+id);p=d.prompt}if(!p.unlocked){openModal(`<div class="eyebrow">FRAME PROMPT</div><h2>${escapeHtml(p.title)}</h2><p>${escapeHtml(p.description||"Авторский промпт для создания оригинального контента.")}</p><p>Полный текст этого промпта станет доступен после запуска покупок.</p><button class="action" disabled aria-disabled="true">Пока недоступно</button><button class="action secondary" onclick="toggleFavorite(${id})"><svg class="heart-inline" viewBox="0 0 64 60" aria-hidden="true"><defs><linearGradient id="miniGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#d9baff"/><stop offset="1" stop-color="#8651d5"/></linearGradient><linearGradient id="miniLiquid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8caff"/><stop offset="1" stop-color="#692bc4"/></linearGradient><clipPath id="miniClip"><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z"/></clipPath></defs><g clip-path="url(#miniClip)"><rect width="64" height="60" fill="#c49aff" fill-opacity=".2"/><path d="M0 29Q10 24 20 29T40 29T64 29V62H0Z" fill="url(#miniLiquid)"/></g><path d="M32 55C26 49 4 34 4 19 4 2 24 -2 32 13 40 -2 60 2 60 19 60 34 38 49 32 55Z" fill="none" stroke="url(#miniGlass)" stroke-width="4"/></svg>В избранное</button>`);return}
