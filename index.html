@@ -195,3 +195,12 @@ function openShop(){openModal(`<div class="eyebrow">FRAME WALLET</div><h2>Кри
 async function buyPack(pack){try{const d=await api("/api/stars/invoice",{method:"POST",body:JSON.stringify({pack})});if(!tg?.openInvoice){toast("Откройте магазин внутри Telegram");return}tg.openInvoice(d.url,(status)=>{if(status==="paid"){toast("Оплата получена. Обновляем баланс…");setTimeout(loadMe,1200)}else if(status==="failed")toast("Оплата не прошла");});closeModal()}catch(e){toast(e.message)}}
 function updateBalance(n){document.getElementById("balance").textContent=n;document.getElementById("profileBalance").textContent=n}
 async function loadMe(){try{const d=await api("/api/me");me=d.user;updateBalance(me.crystals);document.getElementById("userName").textContent=
+(me.first_name||me.username||"Пользователь FRAME");
+document.getElementById("openedCount").textContent="Открыто промптов: "+d.opened;
+}catch(e){toast("Не удалось загрузить профиль: "+e.message)}}
+renderCategories();
+loadPrompts();
+loadMe();
+</script>
+</body>
+</html>
