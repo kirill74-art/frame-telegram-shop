@@ -148,6 +148,9 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE unlocks
+      ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
     CREATE INDEX IF NOT EXISTS idx_prompts_category
       ON prompts(category);
 
