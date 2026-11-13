@@ -337,11 +337,14 @@ async function authenticate(req, res, next) {
 
 /* Проверка сервера */
 
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    service: "FRAME"
-  });
+app.get("/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true, service: "FRAME", database: "connected" });
+  } catch (error) {
+    console.error("Health check database error:", error);
+    res.status(503).json({ ok: false, service: "FRAME", database: "disconnected" });
+  }
 });
 
 app.get("/", (_req, res) => {
