@@ -151,6 +151,12 @@ async function initDatabase() {
     ALTER TABLE prompts
       ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
 
+    ALTER TABLE prompts
+      ADD COLUMN IF NOT EXISTS is_free BOOLEAN NOT NULL DEFAULT FALSE;
+
+    ALTER TABLE prompts
+      ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 1;
+
     ALTER TABLE unlocks
       ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
