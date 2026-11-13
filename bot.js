@@ -10,6 +10,7 @@ const PORT = Number(process.env.PORT || 10000);
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const MINI_APP_URL = process.env.MINI_APP_URL;
+const PURCHASES_ENABLED = false;
 
 if (!BOT_TOKEN) throw new Error("Не задан BOT_TOKEN");
 if (!DATABASE_URL) throw new Error("Не задан DATABASE_URL");
@@ -443,6 +444,7 @@ app.get("/api/prompt/:id", authenticate, async (req, res, next) => {
 /* Покупка промпта */
 
 app.post("/api/unlock", authenticate, async (req, res, next) => {
+  if (!PURCHASES_ENABLED) return res.status(503).json({ error: "Покупки пока не подключены" });
   const promptId = Number(req.body.promptId);
 
   if (!Number.isInteger(promptId) || promptId < 1) {
@@ -643,6 +645,7 @@ app.get("/api/history", authenticate, async (req, res, next) => {
 /* Создание платежа Telegram Stars */
 
 app.post("/api/stars/invoice", authenticate, async (req, res, next) => {
+  if (!PURCHASES_ENABLED) return res.status(503).json({ error: "Покупки через Telegram Stars пока не подключены" });
   try {
     const pack = PACKS[req.body.pack];
 
@@ -682,6 +685,10 @@ app.post("/api/stars/invoice", authenticate, async (req, res, next) => {
 /* Проверка платежа до оплаты */
 
 bot.on("pre_checkout_query", async (ctx) => {
+  if (!PURCHASES_ENABLED) {
+    await ctx.answerPreCheckoutQuery(false, "Покупки пока не подключены");
+    return;
+  }
   try {
     const query = ctx.update.pre_checkout_query;
     const parts = String(query.invoice_payload || "").split(":");
@@ -709,7 +716,7 @@ bot.on("pre_checkout_query", async (ctx) => {
 bot.on("message", async (ctx) => {
   const payment = ctx.message.successful_payment;
 
-  if (!payment) return;
+  if (!payment || !PURCHASES_ENABLED) return;
 
   const parts = String(payment.invoice_payload || "").split(":");
 
