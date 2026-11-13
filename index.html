@@ -35,12 +35,12 @@ button{cursor:pointer;color:inherit}
 .cat small{color:var(--muted)}
 .cat.active{border-color:#9b8cff;box-shadow:0 0 0 1px #9b8cff33}
 .list{display:grid;gap:10px}
-.prompt{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:14px;border-radius:17px;border:1px solid var(--line);background:var(--panel)}
+.prompt{display:flex;align-items:center;gap:12px;text-align:left;width:100%;min-width:0;max-width:100%;overflow:hidden;padding:14px;border-radius:17px;border:1px solid var(--line);background:var(--panel)}
 .picon{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:13px;background:#24243a;font-size:20px}
-.pinfo{min-width:0;flex:1}
+.pinfo{min-width:0;flex:1 1 auto;overflow:hidden}
 .pinfo b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pinfo small{display:block;color:var(--muted);margin-top:5px}
-.price{font-size:12px;color:var(--gold);font-weight:800;white-space:nowrap}
+.price{font-size:12px;color:var(--gold);font-weight:800;white-space:nowrap;flex:0 1 auto;max-width:38%;overflow:hidden;text-overflow:ellipsis}
 .free{color:#8ce0b0}
 .bottom{position:fixed;bottom:0;left:0;right:0;z-index:5;padding:9px 14px calc(9px + env(safe-area-inset-bottom));background:linear-gradient(180deg,#101522e8,#0b0e17f5);border-top:1px solid #34364d;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
 .nav{max-width:720px;margin:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
@@ -187,11 +187,14 @@ async function loadPrompts(category="",q=""){
   if(q.trim())u.set("q",q.trim());
   const d=await api("/api/prompts?"+u);
   if(request!==searchRequest)return;
-  allPrompts=Array.isArray(d.prompts)?d.prompts:[];
+  const received=Array.isArray(d.prompts)?d.prompts:[];
+  allPrompts=category?received.filter(p=>p.category===category):received;
   const stats=document.getElementById("catalogStats");
   if(stats)stats.textContent=`${allPrompts.length} промптов · ${(Array.isArray(d.categories)?d.categories.length:catData.length)} коллекции`;
-  renderList(allPrompts,"promptList");
-  document.getElementById("listCount").textContent=allPrompts.length+" шт.";
+  const isPopular=!category&&!q.trim();
+  const visiblePrompts=isPopular?allPrompts.slice(0,8):allPrompts;
+  renderList(visiblePrompts,"promptList");
+  document.getElementById("listCount").textContent=isPopular?`${visiblePrompts.length} из ${allPrompts.length}`:allPrompts.length+" шт.";
  }catch(e){
   if(request!==searchRequest)return;
   toast(e.message);
@@ -200,7 +203,7 @@ async function loadPrompts(category="",q=""){
 }
 function renderList(items,target){const el=document.getElementById(target);if(!items.length){el.innerHTML='<div class="empty">Здесь пока ничего нет</div>';return}el.innerHTML=items.map(p=>`<button class="prompt" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="price ${p.is_free?"free":""}">${p.unlocked?"Открыт":p.is_free?"Бесплатно":"✧ "+p.price}</span></button>`).join("")}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function selectCategory(c){currentCategory=currentCategory===c?"":c;renderCategories();document.getElementById("listTitle").textContent=currentCategory||"Популярные промпты";loadPrompts(currentCategory,document.getElementById("search").value)}
+function selectCategory(c){currentCategory=currentCategory===c?"":c;renderCategories();document.getElementById("listTitle").textContent=currentCategory||"Популярные промпты";loadPrompts(currentCategory,document.getElementById("search").value);document.getElementById("promptList").scrollIntoView({behavior:"smooth",block:"start"})}
 function searchPrompts(q){clearTimeout(searchTimer);++searchRequest;searchTimer=setTimeout(()=>loadPrompts(currentCategory,q),220)}
 function openModal(html){document.getElementById("sheet").innerHTML=html;document.getElementById("modal").classList.add("show")}
 function closeModal(){document.getElementById("modal").classList.remove("show")}
