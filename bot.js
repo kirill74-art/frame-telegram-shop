@@ -865,6 +865,89 @@ bot.on("message", async (ctx) => {
 
 /* Команды Telegram */
 
+/* Самостоятельная проверка и восстановление недоставленного платежа Stars */
+bot.command("paysupport", async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  await ctx.reply("🔎 Проверяю историю платежей Telegram Stars. Это может занять несколько секунд…");
+
+  try {
+    const history = await bot.telegram.callApi("getStarTransactions", {
+      offset: 0,
+      limit: 100
+    });
+    const transactions = Array.isArray(history?.transactions) ? history.transactions : [];
+    const candidates = transactions.filter((tx) =>
+      tx &&
+      tx.amount === 3 &&
+      tx.source?.type === "user" &&
+      Number(tx.source?.user?.id) === userId &&
+      tx.date >= Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60
+    );
+
+    if (candidates.length === 0) {
+      await ctx.reply("Не нашёл подтверждённый платёж 3 ⭐ в доступной истории. Деньги повторно не списываем. Напиши в поддержку Telegram через Настройки → Помощь и сообщи, что оплата боту @NeoA1i_bot прошла, но кристаллы не начислились.");
+      return;
+    }
+
+    if (candidates.length > 1) {
+      await ctx.reply("Нашёл несколько платежей по 3 ⭐. Чтобы не начислить лишнее, автоматическое восстановление остановлено. Платёж требует ручной проверки.");
+      console.warn("FRAME PAY SUPPORT: multiple matching Stars transactions", { userId, ids: candidates.map(tx => tx.id) });
+      return;
+    }
+
+    const tx = candidates[0];
+    const recoveryChargeId = "stars-recovery:" + String(tx.id);
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users(telegram_id, username, first_name)
+         VALUES($1,$2,$3)
+         ON CONFLICT(telegram_id) DO NOTHING`,
+        [userId, ctx.from.username || null, ctx.from.first_name || ""]
+      );
+
+      const inserted = await client.query(
+        `INSERT INTO payments(user_id, telegram_charge_id, provider_charge_id, stars, crystals, status)
+         VALUES($1,$2,$3,3,3,'recovered')
+         ON CONFLICT(telegram_charge_id) DO NOTHING
+         RETURNING id`,
+        [userId, recoveryChargeId, String(tx.id)]
+      );
+
+      if (inserted.rowCount === 1) {
+        await client.query(
+          "UPDATE users SET crystals = crystals + 3, updated_at = NOW() WHERE telegram_id = $1",
+          [userId]
+        );
+      }
+      const balance = await client.query(
+        "SELECT crystals FROM users WHERE telegram_id = $1",
+        [userId]
+      );
+      await client.query("COMMIT");
+
+      if (inserted.rowCount === 1) {
+        console.log("FRAME PAYMENT RECOVERED FROM STARS HISTORY", { userId, transactionId: tx.id });
+        await ctx.reply("✅ Нашёл твою оплату 3 ⭐ и восстановил начисление! Добавлено 3 кристалла. Текущий баланс: " + balance.rows[0].crystals + " 💎");
+      } else {
+        await ctx.reply("Этот платёж уже был восстановлен ранее. Текущий баланс: " + balance.rows[0].crystals + " 💎");
+      }
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("FRAME PAY SUPPORT ERROR", { userId, error: error.stack || error.message });
+    await ctx.reply("Не удалось автоматически проверить платёж. Деньги повторно не списывай. Ошибка записана для проверки.");
+  }
+});
+
 bot.start(async (ctx) => {
   await ctx.reply(
     "✨ Добро пожаловать в FRAME!\n\nТвой магазин готовых промптов.\n\n💎 Открывай идеи, сохраняй любимые и создавай истории!",
