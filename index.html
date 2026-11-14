@@ -131,6 +131,34 @@ body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),rad
 @keyframes dotPulse{from{opacity:.25;transform:translateY(0)}to{opacity:1;transform:translateY(-4px)}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 
+
+/* FRAME storefront polish */
+.wrap{padding-top:calc(14px + env(safe-area-inset-top));padding-bottom:36px}
+.top{margin:5px 0 20px}.brand{font-size:27px;letter-spacing:5px;text-shadow:0 0 24px #b99aff35}
+.balance{min-height:43px;padding:10px 15px;border-radius:16px;background:linear-gradient(135deg,#b99aff35,#8ce8ff12);border:1px solid #d8c4ff55;box-shadow:inset 0 1px 0 #ffffff45,0 7px 24px #0004}
+.hero{min-height:220px;padding:26px 23px;border:1px solid #d8c4ff3d;background:radial-gradient(ellipse at 86% 12%,#b99aff45,transparent 43%),radial-gradient(ellipse at 5% 100%,#72dfff18,transparent 42%),linear-gradient(135deg,#28203fbb,#111526e8 75%);box-shadow:inset 0 1px 0 #ffffff42,0 24px 65px #0006}
+.hero:after{right:18px;top:12px;font-size:96px;color:#e7d8ff17}
+.hero h1{font-size:clamp(32px,8vw,41px);letter-spacing:-1.6px;line-height:1.04;margin:16px 0 11px}
+.hero p{font-size:13px;max-width:78%;line-height:1.6}
+.home-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:13px 0 23px}
+.metric{min-width:0;padding:12px 7px;text-align:center;border:1px solid #d9c7ff24;border-radius:16px;background:linear-gradient(145deg,#ffffff14,#ffffff04);box-shadow:inset 0 1px 0 #ffffff20;backdrop-filter:blur(18px)}
+.metric b,.metric small{display:block;white-space:nowrap}.metric b{font-size:14px;color:#f5eaff}.metric small{font-size:9px;color:#aaa2c2;margin-top:4px}
+.section-head{margin:25px 2px 13px}.section-head h2{font-size:19px;letter-spacing:-.35px}
+.categories{gap:10px}
+.cat{min-height:145px;padding:15px;border-radius:21px;background:radial-gradient(circle at 100% 0%,#b99aff1b,transparent 48%),linear-gradient(145deg,#ffffff13,#ffffff04);border-color:#d9c7ff24;box-shadow:inset 0 1px 0 #ffffff20,0 12px 28px #0003}
+.cat .emoji{display:grid;place-items:center;width:40px;height:40px;border:1px solid #ffffff24;border-radius:14px;background:linear-gradient(145deg,#c7aaff32,#8ce8ff12);box-shadow:inset 0 1px 0 #ffffff35;font-size:22px}
+.cat strong{font-size:13px;line-height:1.25;margin:12px 0 5px}.cat small{font-size:10px;line-height:1.4}
+.filter-row{display:flex;gap:8px;overflow-x:auto;padding:0 0 12px;scrollbar-width:none}.filter-row::-webkit-scrollbar{display:none}
+.filter{flex:none;padding:9px 14px;border-radius:13px;border:1px solid #d9c7ff25;background:#ffffff09;color:#aaa2c2;font-size:11px;font-weight:750}
+.filter.active{color:#f8f2ff;border-color:#c7aaff70;background:linear-gradient(135deg,#b99aff38,#8ce8ff12);box-shadow:inset 0 1px 0 #ffffff28,0 5px 18px #0003}
+.prompt{padding:12px;border-radius:18px;border-color:#d9c7ff20;background:linear-gradient(120deg,#ffffff0e,#ffffff04);box-shadow:inset 0 1px 0 #ffffff16,0 8px 20px #0002}
+.picon{width:45px;height:45px;border-radius:15px}.pinfo b{font-size:13px}.pinfo small{font-size:10px}
+.price{padding:6px 8px;border-radius:9px;background:#b99aff14;color:#e7d8ff;font-size:10px}.price.free{background:#8ce8ff13;color:#9debdc}
+.profilebox{border-radius:21px;padding:18px;background:linear-gradient(145deg,#ffffff12,#ffffff04);border-color:#d9c7ff25}
+.nav button{min-height:62px}.sheet{border-radius:28px 28px 0 0;padding:24px 19px calc(25px + env(safe-area-inset-bottom))}
+.action{min-height:48px;border-radius:15px;font-size:14px}
+@media(max-width:370px){.metric{padding:10px 4px}.metric small{font-size:8px}.cat{min-height:140px;padding:12px}}
+
 </style>
 </head>
 <body>
@@ -140,7 +168,8 @@ body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),rad
  <main id="home" class="page active">
   <section class="hero"><div class="eyebrow">YOUR CREATIVE SPACE</div><h1>Идеи, которые<br>цепляют.</h1><p>Открывай готовые промпты для историй, загадок и необычных сценариев.</p></section>
   <input id="search" class="search" placeholder="⌕  Найти промпт..." oninput="searchPrompts(this.value)">
-  <div class="section-head"><h2>Категории</h2><span class="muted"><span id="catalogStats">Загрузка каталога…</span></span></div>
+  <div class="home-metrics"><div class="metric"><b>396</b><small>идей для видео</small></div><div class="metric"><b>4</b><small>коллекции</small></div><div class="metric"><b>24/7</b><small>доступ к идеям</small></div></div>
+  <div class="section-head"><h2>Выбери атмосферу</h2><span class="muted"><span id="catalogStats">Загрузка каталога…</span></span></div>
   <div id="categories" class="categories"></div>
   <section class="profilebox" style="margin:22px 0">
    <div class="eyebrow">FRAME CREATOR GUIDE</div>
@@ -154,11 +183,16 @@ body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),rad
    <p style="margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)">Важно: не добавляй надписи и субтитры прямо в генерации видео. Сначала получи чистое видео, затем добавь озвучку и субтитры отдельно в CapCut — так их можно легко исправить и оформить.</p>
   </section>
   <div class="section-head"><h2 id="listTitle">Популярные промпты</h2><span class="muted" id="listCount"></span></div>
+  <div class="filter-row" aria-label="Фильтр промптов">
+   <button type="button" class="filter active" onclick="setPromptFilter('all',this)">Все</button>
+   <button type="button" class="filter" onclick="setPromptFilter('free',this)">Бесплатные</button>
+   <button type="button" class="filter" onclick="setPromptFilter('paid',this)">За кристаллы</button>
+  </div>
   <div id="promptList" class="list"></div>
  </main>
  <main id="favorites" class="page"><div class="section-head"><h2>Избранное</h2></div><div id="favoritesList" class="list"></div></main>
  <main id="history" class="page"><div class="section-head"><h2>Мои открытия</h2></div><div id="historyList" class="list"></div></main>
- <main id="profile" class="page"><div class="section-head"><h2>Профиль</h2></div><div class="profilebox"><div class="muted">ВАШ БАЛАНС</div><h1 style="color:var(--gold);margin:8px 0">✧ <span id="profileBalance">0</span></h1><button class="action" onclick="openShop()">Магазин скоро откроется</button></div><div class="profilebox"><div class="muted">АККАУНТ</div><h3 id="userName">Пользователь FRAME</h3><p id="openedCount" class="muted">Открыто промптов: 0</p></div></main>
+ <main id="profile" class="page"><div class="section-head"><h2>Профиль</h2></div><div class="profilebox"><div class="muted">ВАШ БАЛАНС</div><h1 style="color:var(--gold);margin:8px 0">✧ <span id="profileBalance">0</span></h1><button class="action" onclick="openShop()">Открыть магазин кристаллов ✦</button></div><div class="profilebox"><div class="muted">АККАУНТ</div><h3 id="userName">Пользователь FRAME</h3><p id="openedCount" class="muted">Открыто промптов: 0</p></div></main>
 </div>
 <nav class="bottom" aria-label="Основная навигация"><div class="nav">
  <button type="button" class="active" data-page="home" aria-label="Главная" aria-current="page" onclick="showPage('home',this)"><span class="nav-icon" aria-hidden="true">🏠</span><span>Главная</span></button>
@@ -189,7 +223,7 @@ const tg=window.Telegram?.WebApp; tg?.ready(); tg?.expand();
 const initData=tg?.initData||"";
 const headers={"Content-Type":"application/json","X-Telegram-Init-Data":initData};
 const catData=[["Страшные истории","🌑","Тревожные сюжеты и психологический хоррор"],["Представь, если…","🌌","Необычные миры и сценарии будущего"],["Ночные правила","🌙","Инструкции, за которыми скрывается тайна"],["Тайны и загадки","🔐","Расследования и неожиданные разгадки"]];
-let allPrompts=[],currentCategory="",me=null,searchTimer=null,searchRequest=0;
+let allPrompts=[],currentCategory="",me=null,searchTimer=null,searchRequest=0;let promptFilter="all";
 function toast(s){const t=document.getElementById("toast");t.textContent=s;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
 async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers,...opts.headers}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||"Ошибка запроса");return d}
 function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>{x.classList.remove("active");x.removeAttribute("aria-current")});btn?.classList.add("active");btn?.setAttribute("aria-current","page");if(id==="favorites")loadCollection("favorites","favoritesList");if(id==="history")loadCollection("history","historyList")}
@@ -218,7 +252,8 @@ async function loadPrompts(category="",q=""){
   list.innerHTML='<div class="empty">Не удалось загрузить каталог.<br><button class="action secondary" onclick="loadPrompts(currentCategory,document.getElementById(\'search\').value)">Повторить</button></div>';
  }
 }
-function renderList(items,target){const el=document.getElementById(target);if(!items.length){el.innerHTML='<div class="empty">Здесь пока ничего нет</div>';return}el.innerHTML=items.map(p=>`<button class="prompt" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="price ${p.is_free?"free":""}">${p.unlocked?"Открыт":p.is_free?"Бесплатно":"✧ "+p.price}</span></button>`).join("")}
+function renderList(items,target){const el=document.getElementById(target);const shown=target==="promptList"?items.filter(p=>promptFilter==="all"||(promptFilter==="free"?p.is_free:!p.is_free)):items;if(!shown.length){el.innerHTML='<div class="empty">Подходящих промптов пока нет</div>';return}el.innerHTML=shown.map(p=>`<button class="prompt" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="price ${p.is_free?"free":""}">${p.unlocked?"Открыт":p.is_free?"Бесплатно":"✧ "+p.price}</span></button>`).join("")}
+function setPromptFilter(value,button){promptFilter=value;document.querySelectorAll(".filter").forEach(x=>x.classList.toggle("active",x===button));renderList(allPrompts,"promptList")}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function selectCategory(c){if(!catData.some(item=>item[0]===c))return;currentCategory=c;const search=document.getElementById("search");if(search)search.value="";++searchRequest;renderCategories();document.getElementById("listTitle").textContent=c;document.getElementById("listCount").textContent="99 промптов";loadPrompts(c,"");requestAnimationFrame(()=>document.getElementById("promptList").scrollIntoView({behavior:"smooth",block:"start"}))}
 function searchPrompts(q){clearTimeout(searchTimer);++searchRequest;searchTimer=setTimeout(()=>{loadPrompts(currentCategory,q);document.getElementById("listTitle").textContent=currentCategory?currentCategory+" · поиск":"Результаты поиска"},220)}
