@@ -10,7 +10,7 @@ const PORT = Number(process.env.PORT || 10000);
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const MINI_APP_URL = process.env.MINI_APP_URL;
-const PURCHASES_ENABLED = false;
+const PURCHASES_ENABLED = true;
 
 if (!BOT_TOKEN) throw new Error("Не задан BOT_TOKEN");
 if (!DATABASE_URL) throw new Error("Не задан DATABASE_URL");
