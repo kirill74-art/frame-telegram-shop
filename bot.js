@@ -882,8 +882,11 @@ bot.command("paysupport", async (ctx) => {
       tx &&
       tx.amount === 3 &&
       tx.source?.type === "user" &&
-      tx.source?.transaction_type === "invoice_payment" &&
       Number(tx.source?.user?.id) === userId &&
+      typeof tx.source?.invoice_payload === "string" &&
+      tx.source.invoice_payload.split(":")[0] === "frame" &&
+      Number(tx.source.invoice_payload.split(":")[1]) === userId &&
+      tx.source.invoice_payload.split(":")[2] === "pack3" &&
       tx.date >= Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60
     );
 
