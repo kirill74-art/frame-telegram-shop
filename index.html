@@ -233,14 +233,14 @@ async function toggleFavorite(id){try{const d=await api("/api/favorites/"+id,{me
 async function loadCollection(endpoint,target){try{const d=await api("/api/"+endpoint);renderList(Array.isArray(d.prompts)?d.prompts:[],target)}catch(e){toast(e.message)}}
 async function openShop(){
  if(promoTimer){clearInterval(promoTimer);promoTimer=null}
- openModal('<div class="eyebrow">FRAME WALLET</div><h2>Пополнить кристаллы</h2><p>Выбери набор. Оплата проходит безопасно через Telegram Stars.</p><div id="limitedPack"></div><div class="profilebox" style="margin:14px 0"><b>✧ 10 кристаллов</b><p>10 ⭐</p><button class="action" onclick="buyPack('pack10')">Купить за 10 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 50 кристаллов</b><p>45 ⭐ · выгоднее</p><button class="action" onclick="buyPack('pack50')">Купить за 45 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 100 кристаллов</b><p>80 ⭐ · лучший набор</p><button class="action" onclick="buyPack('pack100')">Купить за 80 ⭐</button></div><button class="action secondary" onclick="closeModal()">Закрыть</button>');
+ openModal('<div class="eyebrow">FRAME WALLET</div><h2>Пополнить кристаллы</h2><p>Выбери набор. Оплата проходит безопасно через Telegram Stars.</p><div id="limitedPack"></div><div class="profilebox" style="margin:14px 0"><b>✧ 10 кристаллов</b><p>10 ⭐</p><button class="action" onclick="buyPack(&quot;pack10&quot;)">Купить за 10 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 50 кристаллов</b><p>45 ⭐ · выгоднее</p><button class="action" onclick="buyPack(&quot;pack50&quot;)">Купить за 45 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 100 кристаллов</b><p>80 ⭐ · лучший набор</p><button class="action" onclick="buyPack(&quot;pack100&quot;)">Купить за 80 ⭐</button></div><button class="action secondary" onclick="closeModal()">Закрыть</button>');
  try{
   const promo=await api("/api/stars/promo");
   const root=document.getElementById("limitedPack");
   if(!root)return;
   if(!promo.active||!promo.expiresAt){root.innerHTML="";return}
   const end=new Date(promo.expiresAt).getTime();
-  root.innerHTML='<div class="profilebox" style="margin:14px 0;border:1px solid #c49aff88;background:linear-gradient(135deg,#a879ff24,#ffffff08)"><div class="eyebrow">⚡ ПРЕДЛОЖЕНИЕ НА 15 МИНУТ</div><b>✧ 3 кристалла</b><p>Всего 3 ⭐ · только на ограниченное время</p><p id="promoCountdown" style="font-weight:800;color:var(--gold);font-size:18px">15:00</p><button id="promoBuy" class="action" onclick="buyPack('pack3')">Забрать за 3 ⭐</button></div>';
+  root.innerHTML='<div class="profilebox" style="margin:14px 0;border:1px solid #c49aff88;background:linear-gradient(135deg,#a879ff24,#ffffff08)"><div class="eyebrow">⚡ ПРЕДЛОЖЕНИЕ НА 15 МИНУТ</div><b>✧ 3 кристалла</b><p>Всего 3 ⭐ · только на ограниченное время</p><p id="promoCountdown" style="font-weight:800;color:var(--gold);font-size:18px">15:00</p><button id="promoBuy" class="action" onclick="buyPack(&quot;pack3&quot;)">Забрать за 3 ⭐</button></div>';
   const tick=()=>{
    const left=Math.max(0,end-Date.now()),clock=document.getElementById("promoCountdown"),button=document.getElementById("promoBuy");
    if(!clock)return;
