@@ -755,9 +755,17 @@ bot.on("pre_checkout_query", async (ctx) => {
 });
 
 /* Начисление после успешной оплаты Telegram Stars */
-bot.on("message", async (ctx) => {
+bot.on("message:successful_payment", async (ctx) => {
   const payment = ctx.message?.successful_payment;
   if (!payment || !PURCHASES_ENABLED) return;
+
+  console.log("FRAME SUCCESSFUL_PAYMENT UPDATE RECEIVED", {
+    userId: ctx.from?.id,
+    currency: payment.currency,
+    total: payment.total_amount,
+    pack: String(payment.invoice_payload || "").split(":")[2] || null,
+    hasChargeId: Boolean(payment.telegram_payment_charge_id)
+  });
 
   const parts = String(payment.invoice_payload || "").split(":");
   const userId = Number(parts[1]);
