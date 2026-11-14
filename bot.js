@@ -754,71 +754,112 @@ bot.on("pre_checkout_query", async (ctx) => {
   }
 });
 
-/* Начисление после успешной оплаты */
-
+/* Начисление после успешной оплаты Telegram Stars */
 bot.on("message", async (ctx) => {
-  const payment = ctx.message.successful_payment;
-
+  const payment = ctx.message?.successful_payment;
   if (!payment || !PURCHASES_ENABLED) return;
 
   const parts = String(payment.invoice_payload || "").split(":");
-
-  if (parts.length !== 4 || parts[0] !== "frame") return;
-
   const userId = Number(parts[1]);
   const pack = PACKS[parts[2]];
 
   if (
-    !pack ||
+    parts.length !== 4 ||
+    parts[0] !== "frame" ||
+    !Number.isSafeInteger(userId) ||
     userId !== ctx.from.id ||
+    !pack ||
     payment.currency !== "XTR" ||
-    payment.total_amount !== pack.stars
+    payment.total_amount !== pack.stars ||
+    !payment.telegram_payment_charge_id
   ) {
-    console.error("Некорректные данные платежа");
+    console.error("FRAME PAYMENT REJECTED: invalid successful_payment payload", {
+      from: ctx.from?.id,
+      payload: payment.invoice_payload,
+      currency: payment.currency,
+      total: payment.total_amount
+    });
     return;
   }
 
-  const client = await pool.connect();
-
+  let client;
   try {
+    client = await pool.connect();
     await client.query("BEGIN");
 
-    const inserted = await client.query(`
-      INSERT INTO payments(
-        user_id,telegram_charge_id,
-        provider_charge_id,stars,crystals
-      )
-      VALUES($1,$2,$3,$4,$5)
-      ON CONFLICT(telegram_charge_id) DO NOTHING
-      RETURNING id
-    `, [
-      userId,
-      payment.telegram_payment_charge_id,
-      payment.provider_payment_charge_id || null,
-      pack.stars,
-      pack.crystals
-    ]);
+    // Ensure the buyer row exists even if the Mini App profile has not been opened yet.
+    await client.query(
+      `INSERT INTO users(telegram_id, username, first_name)
+       VALUES($1,$2,$3)
+       ON CONFLICT(telegram_id) DO NOTHING`,
+      [userId, ctx.from.username || null, ctx.from.first_name || ""]
+    );
 
-    if (inserted.rowCount) {
-      await client.query(`
-        UPDATE users
-        SET crystals=crystals+$2,updated_at=NOW()
-        WHERE telegram_id=$1
-      `, [userId, pack.crystals]);
-    }
+    const inserted = await client.query(
+      `INSERT INTO payments(
+         user_id, telegram_charge_id, provider_charge_id, stars, crystals
+       )
+       VALUES($1,$2,$3,$4,$5)
+       ON CONFLICT(telegram_charge_id) DO NOTHING
+       RETURNING id`,
+      [
+        userId,
+        payment.telegram_payment_charge_id,
+        payment.provider_payment_charge_id || null,
+        pack.stars,
+        pack.crystals
+      ]
+    );
 
-    await client.query("COMMIT");
-
-    if (inserted.rowCount) {
-      await ctx.reply(
-        `✨ Оплата прошла успешно!\n\n💎 Начислено: ${pack.crystals} кристаллов.`
+    if (inserted.rowCount === 1) {
+      const credited = await client.query(
+        `UPDATE users
+         SET crystals = crystals + $2, updated_at = NOW()
+         WHERE telegram_id = $1
+         RETURNING crystals`,
+        [userId, pack.crystals]
       );
+      if (credited.rowCount !== 1) {
+        throw new Error("User row was not updated after successful payment");
+      }
+      await client.query("COMMIT");
+      console.log("FRAME PAYMENT CREDITED", {
+        userId,
+        pack: parts[2],
+        stars: pack.stars,
+        crystals: pack.crystals,
+        balance: credited.rows[0].crystals,
+        chargeId: payment.telegram_payment_charge_id
+      });
+      await ctx.reply(
+        `✨ Оплата прошла успешно!\\n\\n💎 Начислено: ${pack.crystals} кристаллов.\\nБаланс обновлён.`
+      );
+    } else {
+      await client.query("COMMIT");
+      console.log("FRAME PAYMENT DUPLICATE - already processed", {
+        userId,
+        chargeId: payment.telegram_payment_charge_id
+      });
+      await ctx.reply("Этот платёж уже был обработан. Проверь баланс FRAME.");
     }
   } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Ошибка начисления кристаллов:", error);
+    if (client) {
+      try { await client.query("ROLLBACK"); } catch (rollbackError) {
+        console.error("FRAME payment rollback failed:", rollbackError);
+      }
+    }
+    console.error("FRAME PAYMENT CREDIT ERROR", {
+      userId,
+      chargeId: payment.telegram_payment_charge_id,
+      error: error.stack || error.message
+    });
+    try {
+      await ctx.reply("Платёж получен, но начисление кристаллов задерживается. Напиши /paysupport — мы проверим платёж.");
+    } catch (replyError) {
+      console.error("Could not notify user about payment issue:", replyError.message);
+    }
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
