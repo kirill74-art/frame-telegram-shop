@@ -898,7 +898,7 @@ bot.command("paysupport", async (ctx) => {
     }
 
     const tx = candidates[0];
-    const recoveryChargeId = "stars-recovery:" + String(tx.id);
+    const recoveryChargeId = String(tx.id);
     const client = await pool.connect();
 
     try {
