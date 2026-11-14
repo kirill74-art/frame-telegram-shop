@@ -186,6 +186,20 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- Safe migration for databases where payments existed before Stars support.
+    -- Existing rows are preserved; NULL charge IDs are allowed for legacy records.
+    ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS user_id BIGINT,
+      ADD COLUMN IF NOT EXISTS telegram_charge_id TEXT,
+      ADD COLUMN IF NOT EXISTS provider_charge_id TEXT,
+      ADD COLUMN IF NOT EXISTS stars INTEGER,
+      ADD COLUMN IF NOT EXISTS crystals INTEGER,
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'paid',
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+    CREATE UNIQUE INDEX IF NOT EXISTS payments_telegram_charge_id_uidx
+      ON payments(telegram_charge_id);
+
     ALTER TABLE prompts
       ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
 
