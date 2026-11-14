@@ -189,7 +189,7 @@ const tg=window.Telegram?.WebApp; tg?.ready(); tg?.expand();
 const initData=tg?.initData||"";
 const headers={"Content-Type":"application/json","X-Telegram-Init-Data":initData};
 const catData=[["Страшные истории","🌑","Тревожные сюжеты и психологический хоррор"],["Представь, если…","🌌","Необычные миры и сценарии будущего"],["Ночные правила","🌙","Инструкции, за которыми скрывается тайна"],["Тайны и загадки","🔐","Расследования и неожиданные разгадки"]];
-let allPrompts=[],currentCategory="",me=null,searchTimer=null,searchRequest=0;
+let allPrompts=[],currentCategory="",me=null,searchTimer=null,searchRequest=0,promoTimer=null;
 function toast(s){const t=document.getElementById("toast");t.textContent=s;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
 async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers,...opts.headers}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||"Ошибка запроса");return d}
 function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>{x.classList.remove("active");x.removeAttribute("aria-current")});btn?.classList.add("active");btn?.setAttribute("aria-current","page");if(id==="favorites")loadCollection("favorites","favoritesList");if(id==="history")loadCollection("history","historyList")}
@@ -231,8 +231,24 @@ async function buyPrompt(id){try{const d=await api("/api/unlock",{method:"POST",
 function copyPrompt(){if(!window.currentPromptText)return;if(navigator.clipboard?.writeText)navigator.clipboard.writeText(window.currentPromptText).then(()=>toast("Скопировано")).catch(()=>toast("Не удалось скопировать"));else toast("Копирование недоступно")}
 async function toggleFavorite(id){try{const d=await api("/api/favorites/"+id,{method:"POST"});toast(d.favorite?"Добавлено в избранное":"Удалено из избранного");closeModal();if(document.getElementById("favorites").classList.contains("active"))loadCollection("favorites","favoritesList")}catch(e){toast(e.message)}}
 async function loadCollection(endpoint,target){try{const d=await api("/api/"+endpoint);renderList(Array.isArray(d.prompts)?d.prompts:[],target)}catch(e){toast(e.message)}}
-function openShop(){
- openModal('<div class="eyebrow">FRAME WALLET</div><h2>Пополнить кристаллы</h2><p>Выбери набор. Оплата проходит безопасно через Telegram Stars.</p><div class="profilebox" style="margin:14px 0"><b>✧ 10 кристаллов</b><p>10 ⭐</p><button class="action" onclick="buyPack(\'pack10\')">Купить за 10 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 50 кристаллов</b><p>45 ⭐ · выгоднее</p><button class="action" onclick="buyPack(\'pack50\')">Купить за 45 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 100 кристаллов</b><p>80 ⭐ · лучший набор</p><button class="action" onclick="buyPack(\'pack100\')">Купить за 80 ⭐</button></div><button class="action secondary" onclick="closeModal()">Закрыть</button>');
+async function openShop(){
+ if(promoTimer){clearInterval(promoTimer);promoTimer=null}
+ openModal('<div class="eyebrow">FRAME WALLET</div><h2>Пополнить кристаллы</h2><p>Выбери набор. Оплата проходит безопасно через Telegram Stars.</p><div id="limitedPack"></div><div class="profilebox" style="margin:14px 0"><b>✧ 10 кристаллов</b><p>10 ⭐</p><button class="action" onclick="buyPack('pack10')">Купить за 10 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 50 кристаллов</b><p>45 ⭐ · выгоднее</p><button class="action" onclick="buyPack('pack50')">Купить за 45 ⭐</button></div><div class="profilebox" style="margin:14px 0"><b>✧ 100 кристаллов</b><p>80 ⭐ · лучший набор</p><button class="action" onclick="buyPack('pack100')">Купить за 80 ⭐</button></div><button class="action secondary" onclick="closeModal()">Закрыть</button>');
+ try{
+  const promo=await api("/api/stars/promo");
+  const root=document.getElementById("limitedPack");
+  if(!root)return;
+  if(!promo.active||!promo.expiresAt){root.innerHTML="";return}
+  const end=new Date(promo.expiresAt).getTime();
+  root.innerHTML='<div class="profilebox" style="margin:14px 0;border:1px solid #c49aff88;background:linear-gradient(135deg,#a879ff24,#ffffff08)"><div class="eyebrow">⚡ ПРЕДЛОЖЕНИЕ НА 15 МИНУТ</div><b>✧ 3 кристалла</b><p>Всего 3 ⭐ · только на ограниченное время</p><p id="promoCountdown" style="font-weight:800;color:var(--gold);font-size:18px">15:00</p><button id="promoBuy" class="action" onclick="buyPack('pack3')">Забрать за 3 ⭐</button></div>';
+  const tick=()=>{
+   const left=Math.max(0,end-Date.now()),clock=document.getElementById("promoCountdown"),button=document.getElementById("promoBuy");
+   if(!clock)return;
+   clock.textContent=String(Math.floor(left/60000)).padStart(2,"0")+":"+String(Math.floor((left%60000)/1000)).padStart(2,"0");
+   if(left<=0){if(button)button.disabled=true;root.innerHTML='<div class="profilebox" style="margin:14px 0"><b>⏳ Время предложения закончилось</b></div>';clearInterval(promoTimer);promoTimer=null}
+  };
+  tick();promoTimer=setInterval(tick,1000);
+ }catch(e){const root=document.getElementById("limitedPack");if(root)root.innerHTML=""}
 }
 async function buyPack(pack){try{const d=await api("/api/stars/invoice",{method:"POST",body:JSON.stringify({pack})});if(!d.url)throw new Error("Не удалось создать счёт");if(tg?.openInvoice){tg.openInvoice(d.url,(status)=>{if(status==="paid"){toast("Оплата прошла! Обновляем баланс…");setTimeout(loadMe,1200);setTimeout(loadMe,3500)}else if(status==="failed"){toast("Платёж не прошёл. Попробуй ещё раз.")}else if(status==="cancelled"){toast("Оплата отменена")}})}else{window.location.href=d.url}}catch(e){toast(e.message)}}
 function updateBalance(n){document.getElementById("balance").textContent=n;document.getElementById("profileBalance").textContent=n}
