@@ -896,7 +896,7 @@ bot.use(async (ctx, next) => {
 });
 
 /* Начисление сразу после successful_payment Update */
-bot.on("message:successful_payment", async (ctx) => {
+bot.on("message", async (ctx) => {
   const payment = ctx.message?.successful_payment;
   if (!payment || !PURCHASES_ENABLED) return;
 
