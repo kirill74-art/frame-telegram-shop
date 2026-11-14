@@ -866,7 +866,7 @@ async function reconcileStarsPayments(targetUserId = null, notifyUsers = true) {
         try {
           await bot.telegram.sendMessage(
             userId,
-            `💎 Оплату \${pack.stars} ⭐ нашёл в истории Telegram. Начислено \${pack.crystals} кристаллов. Текущий баланс: \${result.balance} 💎`
+            `💎 Оплату ${pack.stars} ⭐ нашёл в истории Telegram. Начислено ${pack.crystals} кристаллов. Текущий баланс: ${result.balance} 💎`
           );
         } catch (notifyError) {
           console.error("FRAME PAYMENT RECOVERY NOTIFICATION ERROR", {
@@ -934,10 +934,10 @@ bot.on("message:successful_payment", async (ctx) => {
 
     if (result.credited) {
       await ctx.reply(
-        `✨ Оплата прошла успешно!\n\n💎 Начислено: \${pack.crystals} кристаллов.\nБаланс обновлён: \${result.balance} 💎`
+        `✨ Оплата прошла успешно!\n\n💎 Начислено: ${pack.crystals} кристаллов.\nБаланс обновлён: ${result.balance} 💎`
       );
     } else {
-      await ctx.reply(`Этот платёж уже обработан. Текущий баланс: \${result.balance} 💎`);
+      await ctx.reply(`Этот платёж уже обработан. Текущий баланс: ${result.balance} 💎`);
     }
   } catch (error) {
     console.error("FRAME PAYMENT CREDIT ERROR", {
@@ -965,11 +965,11 @@ bot.command("paysupport", async (ctx) => {
     const crystals = balance.rows[0]?.crystals ?? 0;
 
     if (result.credited > 0) {
-      await ctx.reply(`✅ Нашёл оплату и начислил \${result.creditedCrystals} кристаллов. Текущий баланс: \${crystals} 💎`);
+      await ctx.reply(`✅ Нашёл оплату и начислил ${result.creditedCrystals} кристаллов. Текущий баланс: ${crystals} 💎`);
     } else if (result.found > 0) {
-      await ctx.reply(`Платёж найден, но уже был учтён ранее. Текущий баланс: \${crystals} 💎`);
+      await ctx.reply(`Платёж найден, но уже был учтён ранее. Текущий баланс: ${crystals} 💎`);
     } else {
-      await ctx.reply(`В последних \${result.scanned} транзакциях не нашёл неоплаченный счёт FRAME для твоего аккаунта. Баланс: \${crystals} 💎. Повторно платить не нужно.`);
+      await ctx.reply(`В последних ${result.scanned} транзакциях не нашёл неоплаченный счёт FRAME для твоего аккаунта. Баланс: ${crystals} 💎. Повторно платить не нужно.`);
     }
   } catch (error) {
     console.error("FRAME PAY SUPPORT ERROR", {
