@@ -878,6 +878,20 @@ async function main() {
   validatePrompts();
   await initDatabase();
 
+  // Постоянная кнопка Mini App в меню чата Telegram
+  try {
+    await bot.telegram.callApi("setChatMenuButton", {
+      menu_button: {
+        type: "web_app",
+        text: "Открыть FRAME",
+        web_app: { url: MINI_APP_URL }
+      }
+    });
+    console.log("FRAME chat menu button configured");
+  } catch (error) {
+    console.error("Could not configure FRAME chat menu button:", error.message);
+  }
+
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`FRAME server started on port ${PORT}`);
   });
