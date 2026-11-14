@@ -896,9 +896,11 @@ bot.use(async (ctx, next) => {
 });
 
 /* Начисление сразу после successful_payment Update */
-bot.on("message", async (ctx) => {
+bot.on("message", async (ctx, next) => {
   const payment = ctx.message?.successful_payment;
-  if (!payment || !PURCHASES_ENABLED) return;
+  // Пропускаем все обычные сообщения дальше, чтобы команды /start, /app,
+  // /paysupport и остальные обработчики Telegraf продолжали работать.
+  if (!payment || !PURCHASES_ENABLED) return next();
 
   const parts = String(payment.invoice_payload || "").split(":");
   const userId = Number(parts[1]);
