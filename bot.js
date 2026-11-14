@@ -442,7 +442,7 @@ app.get("/api/creator/status", authenticate, async (req, res, next) => {
 });
 
 app.post("/api/creator/generate", authenticate, async (req, res, next) => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return res.status(503).json({
       error: "AI Creator пока настраивается. Скоро функция станет доступна."
@@ -488,42 +488,43 @@ app.post("/api/creator/generate", authenticate, async (req, res, next) => {
       client.release();
     }
 
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{
-              text: "Ты — AI Creator внутри FRAME, эксперт по вирусным коротким видео. Создавай оригинальный, законченный сценарий для вертикального ролика 9:16 в выразительной 2D-анимации, не фотореализме. Нужны сильный хук в первые 2 секунды, напряжённое развитие, конкретные визуальные действия, монтажный ритм, звуковые эффекты, отдельный текст дикторской озвучки и финальный поворот или вопрос зрителю. Не добавляй водяные знаки и логотипы. Не утверждай, что видео уже создано: ты пишешь только сценарий и подробный видеопромпт. Отвечай на русском, структурированно и без общих фраз."
-            }]
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.MINI_APP_URL,
+        "X-Title": "FRAME AI Creator"
+      },
+      body: JSON.stringify({
+        model: "openrouter/free",
+        messages: [
+          {
+            role: "system",
+            content: "Ты — AI Creator внутри FRAME, эксперт по вирусным коротким видео. Создавай оригинальный, законченный сценарий для вертикального ролика 9:16 в выразительной 2D-анимации, не фотореализме. Нужны сильный хук в первые 2 секунды, напряжённое развитие, конкретные визуальные действия, монтажный ритм, звуковые эффекты, отдельный текст дикторской озвучки и финальный поворот или вопрос зрителю. Не добавляй водяные знаки и логотипы. Не утверждай, что видео уже создано: ты пишешь только сценарий и подробный видеопромпт. Отвечай на русском, структурированно и без общих фраз."
           },
-          contents: [{
+          {
             role: "user",
-            parts: [{ text: "Создай сценарий и готовый подробный видеопромпт по идее пользователя: " + userPrompt }]
-          }],
-          generationConfig: {
-            temperature: 0.9,
-            maxOutputTokens: 1800
+            content: "Создай сценарий и готовый подробный видеопромпт по идее пользователя: " + userPrompt
           }
-        })
-      }
-    );
+        ],
+        temperature: 0.9,
+        max_tokens: 1800
+      })
+    });
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const providerMessage = data?.error?.message || "Gemini API временно недоступен";
+      const providerMessage = data?.error?.message || "OpenRouter API временно недоступен";
       throw new Error(providerMessage.slice(0, 350));
     }
-    const result = (data?.candidates?.[0]?.content?.parts || [])
-      .map(part => part.text || "")
-      .join("\n")
-      .trim();
-    if (!result) throw new Error("Gemini не вернул текст. Попробуй изменить идею.");
+    const messageContent = data?.choices?.[0]?.message?.content;
+    const result = (typeof messageContent === "string"
+      ? messageContent
+      : Array.isArray(messageContent)
+        ? messageContent.map(part => part.text || "").join("\\n")
+        : "").trim();
+    if (!result) throw new Error("AI-модель не вернула текст. Попробуй изменить идею.");
 
     await pool.query(
       "UPDATE ai_creations SET result=$2,status='completed' WHERE id=$1",
@@ -541,8 +542,8 @@ app.post("/api/creator/generate", authenticate, async (req, res, next) => {
       await pool.query("UPDATE ai_creations SET status='failed' WHERE id=$1", [creationId]).catch(() => {});
     }
     console.error("FRAME AI CREATOR ERROR:", error.message);
-    if (/429|quota|RESOURCE_EXHAUSTED/i.test(error.message)) {
-      return res.status(503).json({ error: "Бесплатный лимит Gemini на стороне сервиса временно исчерпан. Попробуй позже." });
+    if (/429|rate.?limit|quota|capacity|temporarily unavailable/i.test(error.message)) {
+      return res.status(503).json({ error: "Бесплатная AI-модель сейчас перегружена или достигнут лимит OpenRouter. Попробуй позже." });
     }
     res.status(502).json({ error: "Не получилось создать сценарий. Попробуй ещё раз позже." });
   }
