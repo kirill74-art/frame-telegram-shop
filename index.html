@@ -188,7 +188,29 @@ body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),rad
 .action{min-height:48px;border-radius:15px;font-size:14px}
 @media(max-width:370px){.metric{padding:10px 4px}.metric small{font-size:8px}.cat{min-height:140px;padding:12px}}
 
-.creator-card{padding:19px;border:1px solid #d9c7ff35;border-radius:22px;background:linear-gradient(145deg,#ffffff13,#ffffff04);margin:14px 0}.creator-input{width:100%;min-height:112px;resize:vertical;padding:14px;border-radius:15px;border:1px solid #d9c7ff38;background:#0e1020aa;color:#fff;line-height:1.5}.creator-result{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;font-size:13px;padding:15px;border-radius:15px;border:1px solid #d9c7ff30;background:#080a16aa;max-height:55vh;overflow:auto;margin-top:14px}.creator-meter{display:flex;justify-content:space-between;margin:12px 0;color:#cfc2e8;font-size:12px}.creator-history{display:grid;gap:9px;margin-top:12px}.creator-history button{text-align:left;padding:12px;border:1px solid #ffffff20;border-radius:13px;background:#ffffff0a}@media(max-width:360px){.nav{gap:3px}.nav button{font-size:8px;padding-left:0;padding-right:0}}</style>
+.creator-card{padding:19px;border:1px solid #d9c7ff35;border-radius:22px;background:linear-gradient(145deg,#ffffff13,#ffffff04);margin:14px 0}.creator-input{width:100%;min-height:112px;resize:vertical;padding:14px;border-radius:15px;border:1px solid #d9c7ff38;background:#0e1020aa;color:#fff;line-height:1.5}.creator-result{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;font-size:13px;padding:15px;border-radius:15px;border:1px solid #d9c7ff30;background:#080a16aa;max-height:55vh;overflow:auto;margin-top:14px}.creator-meter{display:flex;justify-content:space-between;margin:12px 0;color:#cfc2e8;font-size:12px}.creator-history{display:grid;gap:9px;margin-top:12px}.creator-history button{text-align:left;padding:12px;border:1px solid #ffffff20;border-radius:13px;background:#ffffff0a}@media(max-width:360px){.nav{gap:3px}.nav button{font-size:8px;padding-left:0;padding-right:0}}
+/* Claude AI glass chat */
+.claude-intro{padding:18px;border:1px solid #d9c7ff35;border-radius:21px;background:radial-gradient(circle at 100% 0%,#b99aff25,transparent 48%),linear-gradient(145deg,#ffffff13,#ffffff04);margin:10px 0 18px}
+.claude-intro h3{font-size:20px;margin:9px 0 7px;background:linear-gradient(100deg,#fff,#d9c5ff 70%,#a8edff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.claude-intro p{font-size:12px;line-height:1.6;color:#c9c2d8;margin:0}
+.claude-note{font-size:10px;color:#b9acd2;border-top:1px solid #ffffff18;padding-top:11px;margin-top:12px;line-height:1.5}
+.claude-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 2px 10px;font-size:13px}
+.claude-new{border:1px solid #d9c7ff35;background:#b99aff18;color:#eadfff;border-radius:12px;padding:9px 12px;font-size:11px;font-weight:800}
+.claude-chats{display:flex;gap:7px;overflow-x:auto;padding:0 0 9px;scrollbar-width:none}.claude-chats::-webkit-scrollbar{display:none}
+.claude-chat-chip{flex:none;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:9px 12px;border:1px solid #ffffff20;border-radius:12px;background:#ffffff09;color:#cfc4e4;font-size:11px}
+.claude-chat-chip.active{border-color:#c7aaff88;background:#b99aff25;color:#fff}
+.claude-messages{min-height:220px;max-height:48vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:13px 10px;border:1px solid #d9c7ff22;border-radius:19px;background:rgba(8,9,20,.42)}
+.claude-welcome{margin:auto;text-align:center;padding:24px 10px;color:#aaa2c2}.claude-welcome span{display:block;font-size:30px;color:#d6bdff;margin-bottom:8px}.claude-welcome b{color:#f0e8ff;font-size:15px}.claude-welcome p{font-size:11px;line-height:1.5}
+.claude-message{max-width:90%;padding:12px 13px;border:1px solid #ffffff18;border-radius:16px;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.claude-message.user{align-self:flex-end;background:linear-gradient(135deg,#9d7be944,#5f70a833);border-color:#c5a8ff42;color:#fff;border-bottom-right-radius:5px}
+.claude-message.assistant{align-self:flex-start;background:linear-gradient(135deg,#ffffff12,#a9caff09);color:#eee8f7;border-bottom-left-radius:5px}
+.claude-form{display:flex;align-items:flex-end;gap:8px;margin-top:10px;padding:8px;border:1px solid #d9c7ff35;border-radius:18px;background:linear-gradient(135deg,#ffffff13,#ffffff05)}
+.claude-form textarea{flex:1;min-width:0;max-height:130px;resize:vertical;border:0;outline:0;background:transparent;color:#fff;padding:8px;font:13px/1.5 inherit}
+.claude-form textarea::placeholder{color:#9288aa}
+.claude-form button{width:42px;height:42px;flex:none;border:0;border-radius:13px;background:linear-gradient(135deg,#e4d6ff,#a98aff 60%,#8ce8ff);color:#191126;font-size:20px;font-weight:900}
+.claude-form button:disabled{opacity:.45}
+.claude-footnote{font-size:10px;line-height:1.5;color:#938aa8;text-align:center;margin:10px 4px 18px}
+</style>
 </head>
 <body>
 <div class="glass-welcome" aria-label="Добро пожаловать в FRAME"><div class="welcome-copy"><div class="welcome-title">Добро пожаловать</div><div class="welcome-sub">FRAME · PROMPT STORE</div><span class="welcome-dot"></span><span class="welcome-dot"></span><span class="welcome-dot"></span></div></div>
@@ -219,12 +241,22 @@ body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),rad
   </div>
   <div id="promptList" class="list"></div>
  </main>
+ <main id="claude" class="page">
+  <div class="section-head"><h2>Claude AI</h2><span class="muted" id="claudeQuota">Загрузка лимита…</span></div>
+  <section class="claude-intro"><div class="eyebrow">FRAME · AI CHAT</div><h3>Твой личный AI-помощник</h3><p>Общайся с Claude, задавай вопросы, проси помочь с идеями, текстами, учёбой и кодом. История чатов сохраняется в твоём аккаунте FRAME.</p><div class="claude-note">Это AI-чат FRAME на базе Claude API, не отдельная подписка Claude.ai.</div></section>
+  <div class="claude-toolbar"><b>Твои диалоги</b><button type="button" class="claude-new" onclick="newClaudeChat()">＋ Новый чат</button></div>
+  <div id="claudeChats" class="claude-chats"><div class="empty">Загружаем чаты…</div></div>
+  <div id="claudeMessages" class="claude-messages"><div class="claude-welcome"><span>✦</span><b>С чего начнём?</b><p>Напиши сообщение ниже — Claude поможет разобраться с задачей.</p></div></div>
+  <form id="claudeForm" class="claude-form" onsubmit="sendClaudeMessage(event)"><textarea id="claudeInput" maxlength="4000" rows="2" placeholder="Напиши сообщение Claude…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();document.getElementById('claudeForm').requestSubmit()}"></textarea><button id="claudeSend" type="submit" aria-label="Отправить сообщение">➤</button></form>
+  <p class="claude-footnote" id="claudeStatus">5 бесплатных сообщений в день на аккаунт FRAME. Лимит общий для всех чатов.</p>
+ </main>
  <main id="favorites" class="page"><div class="section-head"><h2>Избранное</h2></div><div id="favoritesList" class="list"></div></main>
  <main id="history" class="page"><div class="section-head"><h2>Мои открытия</h2></div><div id="historyList" class="list"></div></main>
  <main id="profile" class="page"><div class="section-head"><h2>Профиль</h2></div><div class="profilebox"><div class="muted">ВАШ БАЛАНС</div><h1 style="color:var(--gold);margin:8px 0">✧ <span id="profileBalance">0</span></h1><button class="action" onclick="openShop()">Открыть магазин кристаллов ✦</button></div><div class="profilebox"><div class="muted">АККАУНТ</div><h3 id="userName">Пользователь FRAME</h3><p id="openedCount" class="muted">Открыто промптов: 0</p></div></main>
 </div>
 <nav class="bottom" aria-label="Основная навигация"><div class="nav">
  <button type="button" class="active" data-page="home" aria-label="Главная" aria-current="page" onclick="showPage('home',this)"><span class="nav-icon" aria-hidden="true">🏠</span><span>Главная</span></button>
+ <button type="button" data-page="claude" aria-label="Claude AI" onclick="showPage('claude',this)"><span class="nav-icon" aria-hidden="true">✦</span><span>Claude</span></button>
  <button type="button" data-page="favorites" aria-label="Избранное" onclick="showPage('favorites',this)"><span class="nav-icon" aria-hidden="true">
 <svg class="glass-heart" viewBox="0 0 64 60" role="img" aria-label="Фиолетовое стеклянное сердце">
 <defs>
@@ -255,7 +287,7 @@ const catData=[["Страшные истории","🌑","Тревожные с�
 let allPrompts=[],currentCategory="",me=null,searchTimer=null,searchRequest=0;let promptFilter="all";
 function toast(s){const t=document.getElementById("toast");t.textContent=s;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
 async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers,...opts.headers}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||"Ошибка запроса");return d}
-function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>{x.classList.remove("active");x.removeAttribute("aria-current")});btn?.classList.add("active");btn?.setAttribute("aria-current","page");if(id==="favorites")loadCollection("favorites","favoritesList");if(id==="history")loadCollection("history","historyList");}
+function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>{x.classList.remove("active");x.removeAttribute("aria-current")});btn?.classList.add("active");btn?.setAttribute("aria-current","page");if(id==="favorites")loadCollection("favorites","favoritesList");if(id==="history")loadCollection("history","historyList");if(id==="claude"){loadClaudeStatus();loadClaudeChats();}}
 function renderCategories(){const root=document.getElementById("categories");root.innerHTML=catData.map(([n,e,d],i)=>`<button type="button" class="cat ${currentCategory===n?"active":""}" data-category-index="${i}" aria-pressed="${currentCategory===n}" aria-label="Открыть категорию ${escapeHtml(n)}"><span class="emoji">${e}</span><strong>${escapeHtml(n)}</strong><small>${escapeHtml(d)}</small><span class="cat-arrow" aria-hidden="true">↗</span></button>`).join("");root.querySelectorAll("[data-category-index]").forEach(button=>button.addEventListener("click",()=>{const item=catData[Number(button.dataset.categoryIndex)];if(item)selectCategory(item[0])}))}
 async function loadPrompts(category="",q=""){
  const request=++searchRequest;
@@ -352,6 +384,82 @@ function copyCreatorResult(){
  if(!creatorResultText)return;
  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(creatorResultText).then(()=>toast("Сценарий скопирован")).catch(()=>toast("Не удалось скопировать"));
  else toast("Копирование недоступно");
+}
+
+
+let activeClaudeChat=null;
+async function loadClaudeStatus(){
+ try{
+  const d=await api("/api/claude/status");
+  document.getElementById("claudeQuota").textContent=d.remaining+" из "+d.limit+" сегодня";
+  if(!d.configured)document.getElementById("claudeStatus").textContent="Claude API пока не подключён: добавь ANTHROPIC_API_KEY в Render.";
+  else document.getElementById("claudeStatus").textContent="Осталось бесплатных сообщений сегодня: "+d.remaining+". Лимит общий для всех диалогов.";
+ }catch(e){document.getElementById("claudeStatus").textContent=e.message}
+}
+function renderClaudeMessages(messages){
+ const root=document.getElementById("claudeMessages");
+ if(!messages.length){root.innerHTML='<div class="claude-welcome"><span>✦</span><b>С чего начнём?</b><p>Напиши сообщение ниже — Claude поможет разобраться с задачей.</p></div>';return}
+ root.innerHTML=messages.map(m=>'<div class="claude-message '+(m.role==="user"?"user":"assistant")+'">'+escapeHtml(m.content)+'</div>').join("");
+ root.scrollTop=root.scrollHeight;
+}
+async function loadClaudeChats(){
+ try{
+  const d=await api("/api/claude/chats");
+  const root=document.getElementById("claudeChats");
+  if(!d.chats.length){root.innerHTML='<span class="muted" style="font-size:11px">Пока нет диалогов — создай первый</span>';return}
+  root.innerHTML=d.chats.map(c=>'<button type="button" class="claude-chat-chip '+(Number(c.id)===Number(activeClaudeChat)?"active":"")+'" data-chat-id="'+Number(c.id)+'">'+escapeHtml(c.title||"Новый диалог")+'</button>').join("");
+  root.querySelectorAll("[data-chat-id]").forEach(b=>b.addEventListener("click",()=>openClaudeChat(Number(b.dataset.chatId))));
+ }catch(e){document.getElementById("claudeChats").innerHTML='<span class="muted">'+escapeHtml(e.message)+'</span>'}
+}
+async function openClaudeChat(id){
+ try{
+  const d=await api("/api/claude/chats/"+id);
+  activeClaudeChat=Number(d.chat.id);
+  renderClaudeMessages(d.messages||[]);
+  await loadClaudeChats();
+ }catch(e){toast(e.message)}
+}
+async function newClaudeChat(){
+ try{
+  const d=await api("/api/claude/chats",{method:"POST",body:JSON.stringify({})});
+  activeClaudeChat=Number(d.chat.id);
+  renderClaudeMessages([]);
+  await loadClaudeChats();
+  document.getElementById("claudeInput").focus();
+ }catch(e){toast(e.message)}
+}
+async function sendClaudeMessage(event){
+ event.preventDefault();
+ const input=document.getElementById("claudeInput");
+ const button=document.getElementById("claudeSend");
+ const content=input.value.trim();
+ if(!content)return;
+ if(!activeClaudeChat)await newClaudeChat();
+ if(!activeClaudeChat)return;
+ const old=input.value;
+ input.value="";
+ button.disabled=true;
+ const root=document.getElementById("claudeMessages");
+ const existing=[...root.querySelectorAll(".claude-message")].map(el=>({role:el.classList.contains("user")?"user":"assistant",content:el.textContent}));
+ existing.push({role:"user",content});
+ renderClaudeMessages(existing);
+ const wait=document.createElement("div");
+ wait.className="claude-message assistant";
+ wait.textContent="Claude думает…";
+ root.appendChild(wait);root.scrollTop=root.scrollHeight;
+ try{
+  const d=await api("/api/claude/chats/"+activeClaudeChat+"/messages",{method:"POST",body:JSON.stringify({content})});
+  const history=await api("/api/claude/chats/"+activeClaudeChat);
+  renderClaudeMessages(history.messages||[]);
+  document.getElementById("claudeQuota").textContent=d.remaining+" сообщений осталось";
+  document.getElementById("claudeStatus").textContent="Ответ сохранён в истории диалога.";
+  await loadClaudeChats();
+ }catch(e){
+  wait.remove();
+  const err=document.createElement("div");err.className="claude-message assistant";err.textContent=e.message;root.appendChild(err);root.scrollTop=root.scrollHeight;
+  input.value=old;
+  loadClaudeStatus();
+ }finally{button.disabled=false;input.focus()}
 }
 
 renderCategories();
