@@ -40,7 +40,8 @@ const CATEGORIES = [
 const PACKS = {
   pack10: { stars: 10, crystals: 10, title: "10 кристаллов" },
   pack50: { stars: 45, crystals: 50, title: "50 кристаллов" },
-  pack100: { stars: 80, crystals: 100, title: "100 кристаллов" }
+  pack100: { stars: 80, crystals: 100, title: "100 кристаллов" },
+  pack3: { stars: 3, crystals: 3, title: "Временный мини-пак" }
 };
 
 const PROMPTS = require("./prompts.json");
@@ -97,6 +98,14 @@ function validatePrompts() {
 
 async function initDatabase() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS limited_offers (
+      offer_key TEXT PRIMARY KEY,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    INSERT INTO limited_offers(offer_key, expires_at)
+    VALUES ('mini_pack_3', NOW() + INTERVAL '15 minutes')
+    ON CONFLICT (offer_key) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS users (
       telegram_id BIGINT PRIMARY KEY,
       username TEXT,
@@ -673,12 +682,33 @@ app.get("/api/history", authenticate, async (req, res, next) => {
   }
 });
 
-/* Создание платежа Telegram Stars */
+/* Временная акция: 3 кристалла за 3 Stars */
+app.get("/api/stars/promo", authenticate, async (_req, res, next) => {
+  try {
+    const result = await pool.query(
+      "SELECT expires_at, expires_at > NOW() AS active FROM limited_offers WHERE offer_key=$1",
+      ["mini_pack_3"]
+    );
+    if (!result.rowCount) return res.json({ active: false });
+    res.json({ active: result.rows[0].active, expiresAt: result.rows[0].expires_at });
+  } catch (error) { next(error); }
+});
 
+/* Создание платежа Telegram Stars */
 app.post("/api/stars/invoice", authenticate, async (req, res, next) => {
   if (!PURCHASES_ENABLED) return res.status(503).json({ error: "Покупки через Telegram Stars пока не подключены" });
   try {
     const pack = PACKS[req.body.pack];
+
+    if (req.body.pack === "pack3") {
+      const promo = await pool.query(
+        "SELECT expires_at > NOW() AS active FROM limited_offers WHERE offer_key=const pack = PACKS[req.body.pack];",
+        ["mini_pack_3"]
+      );
+      if (!promo.rowCount || !promo.rows[0].active) {
+        return res.status(410).json({ error: "Время мини-предложения закончилось" });
+      }
+    }
 
     if (!pack) {
       return res.status(400).json({
@@ -724,12 +754,21 @@ bot.on("pre_checkout_query", async (ctx) => {
     const query = ctx.update.pre_checkout_query;
     const parts = String(query.invoice_payload || "").split(":");
     const pack = PACKS[parts[2]];
+    let promoActive = true;
+    if (parts[2] === "pack3") {
+      const promo = await pool.query(
+        "SELECT expires_at > NOW() AS active FROM limited_offers WHERE offer_key=const pack = PACKS[parts[2]];",
+        ["mini_pack_3"]
+      );
+      promoActive = Boolean(promo.rowCount && promo.rows[0].active);
+    }
 
     const valid =
       parts.length === 4 &&
       parts[0] === "frame" &&
       Number(parts[1]) === query.from.id &&
       pack &&
+      promoActive &&
       query.currency === "XTR" &&
       query.total_amount === pack.stars;
 
