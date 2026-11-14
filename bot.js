@@ -1043,8 +1043,8 @@ async function startBotWithRetry() {
 
   while (true) {
     try {
-      await bot.launch();
-      console.log("FRAME Telegram bot started");
+      await bot.launch({ allowedUpdates: ["message", "pre_checkout_query"] });
+      console.log("FRAME Telegram bot started (message + pre_checkout_query updates enabled)");
       void runStarsReconciliation();
       const reconciliationTimer = setInterval(() => void runStarsReconciliation(), 30000);
       if (typeof reconciliationTimer.unref === "function") reconciliationTimer.unref();
