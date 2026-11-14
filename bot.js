@@ -98,6 +98,18 @@ function validatePrompts() {
 
 async function initDatabase() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS ai_creations (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
+      user_prompt TEXT NOT NULL,
+      result TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','completed','failed')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_creations_user_date
+      ON ai_creations(user_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS limited_offers (
       offer_key TEXT PRIMARY KEY,
       expires_at TIMESTAMPTZ NOT NULL
@@ -400,6 +412,139 @@ app.get("/api/me", authenticate, async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/* FRAME AI Creator — 5 личных бесплатных сценариев в сутки */
+app.get("/api/creator/status", authenticate, async (req, res, next) => {
+  try {
+    const id = req.telegramUser.id;
+    const usage = await pool.query(
+      `SELECT COUNT(*)::int AS used
+       FROM ai_creations
+       WHERE user_id=$1
+         AND created_at >= date_trunc('day', NOW())
+         AND status <> 'failed'`,
+      [id]
+    );
+    const history = await pool.query(
+      `SELECT id, user_prompt, result, status, created_at
+       FROM ai_creations
+       WHERE user_id=$1 AND status='completed'
+       ORDER BY created_at DESC LIMIT 10`,
+      [id]
+    );
+    const used = usage.rows[0].used;
+    res.json({ limit: 5, used, remaining: Math.max(0, 5-used), history: history.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/creator/generate", authenticate, async (req, res, next) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({
+      error: "AI Creator пока настраивается. Скоро функция станет доступна."
+    });
+  }
+
+  const userPrompt = String(req.body.prompt || "").trim().slice(0, 1200);
+  if (userPrompt.length < 5) {
+    return res.status(400).json({ error: "Напиши идею хотя бы в нескольких словах." });
+  }
+
+  const userId = req.telegramUser.id;
+  let creationId = null;
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [userId]);
+      const count = await client.query(
+        `SELECT COUNT(*)::int AS used FROM ai_creations
+         WHERE user_id=$1 AND created_at >= date_trunc('day', NOW())
+           AND status <> 'failed'`,
+        [userId]
+      );
+      if (count.rows[0].used >= 5) {
+        await client.query("ROLLBACK");
+        return res.status(429).json({
+          error: "На сегодня бесплатные сценарии закончились. Лимит обновится завтра.",
+          used: 5, remaining: 0
+        });
+      }
+      const inserted = await client.query(
+        `INSERT INTO ai_creations(user_id,user_prompt,status)
+         VALUES($1,$2,'pending') RETURNING id`,
+        [userId, userPrompt]
+      );
+      creationId = inserted.rows[0].id;
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{
+              text: "Ты — AI Creator внутри FRAME, эксперт по вирусным коротким видео. Создавай оригинальный, законченный сценарий для вертикального ролика 9:16 в выразительной 2D-анимации, не фотореализме. Нужны сильный хук в первые 2 секунды, напряжённое развитие, конкретные визуальные действия, монтажный ритм, звуковые эффекты, отдельный текст дикторской озвучки и финальный поворот или вопрос зрителю. Не добавляй водяные знаки и логотипы. Не утверждай, что видео уже создано: ты пишешь только сценарий и подробный видеопромпт. Отвечай на русском, структурированно и без общих фраз."
+            }]
+          },
+          contents: [{
+            role: "user",
+            parts: [{ text: "Создай сценарий и готовый подробный видеопромпт по идее пользователя: " + userPrompt }]
+          }],
+          generationConfig: {
+            temperature: 0.9,
+            maxOutputTokens: 1800
+          }
+        })
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const providerMessage = data?.error?.message || "Gemini API временно недоступен";
+      throw new Error(providerMessage.slice(0, 350));
+    }
+    const result = (data?.candidates?.[0]?.content?.parts || [])
+      .map(part => part.text || "")
+      .join("\n")
+      .trim();
+    if (!result) throw new Error("Gemini не вернул текст. Попробуй изменить идею.");
+
+    await pool.query(
+      "UPDATE ai_creations SET result=$2,status='completed' WHERE id=$1",
+      [creationId, result]
+    );
+    const usage = await pool.query(
+      `SELECT COUNT(*)::int AS used FROM ai_creations
+       WHERE user_id=$1 AND created_at >= date_trunc('day', NOW())
+         AND status <> 'failed'`,
+      [userId]
+    );
+    res.json({ ok: true, result, used: usage.rows[0].used, remaining: Math.max(0, 5-usage.rows[0].used) });
+  } catch (error) {
+    if (creationId !== null) {
+      await pool.query("UPDATE ai_creations SET status='failed' WHERE id=$1", [creationId]).catch(() => {});
+    }
+    console.error("FRAME AI CREATOR ERROR:", error.message);
+    if (/429|quota|RESOURCE_EXHAUSTED/i.test(error.message)) {
+      return res.status(503).json({ error: "Бесплатный лимит Gemini на стороне сервиса временно исчерпан. Попробуй позже." });
+    }
+    res.status(502).json({ error: "Не получилось создать сценарий. Попробуй ещё раз позже." });
   }
 });
 
