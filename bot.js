@@ -144,6 +144,27 @@ async function initDatabase() {
     ALTER TABLE users
       ALTER COLUMN legacy_balance_migrated SET DEFAULT TRUE;
 
+    CREATE TABLE IF NOT EXISTS claude_chats (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT 'Новый диалог',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_claude_chats_user_date
+      ON claude_chats(user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS claude_messages (
+      id BIGSERIAL PRIMARY KEY,
+      chat_id BIGINT NOT NULL REFERENCES claude_chats(id) ON DELETE CASCADE,
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_claude_messages_chat_date
+      ON claude_messages(chat_id, created_at ASC);
+
     CREATE TABLE IF NOT EXISTS ai_creations (
       id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
@@ -421,6 +442,177 @@ app.get("/api/creator/status", authenticate, (_req, res) => {
 });
 app.post("/api/creator/generate", authenticate, (_req, res) => {
   res.status(503).json({ error: "AI Creator временно отключён." });
+});
+
+
+/* Claude AI chat — личные диалоги пользователей FRAME */
+const CLAUDE_DAILY_LIMIT = 5;
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5-5";
+
+app.get("/api/claude/status", authenticate, async (req, res, next) => {
+  try {
+    const usage = await pool.query(`
+      SELECT COUNT(*)::int AS used
+      FROM claude_messages
+      WHERE user_id=$1 AND role='user'
+        AND created_at >= date_trunc('day', NOW())
+    `, [req.telegramUser.id]);
+    const used = usage.rows[0].used;
+    res.json({
+      used,
+      limit: CLAUDE_DAILY_LIMIT,
+      remaining: Math.max(0, CLAUDE_DAILY_LIMIT - used),
+      configured: Boolean(process.env.ANTHROPIC_API_KEY)
+    });
+  } catch (error) { next(error); }
+});
+
+app.get("/api/claude/chats", authenticate, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.id, c.title, c.updated_at,
+        (SELECT content FROM claude_messages m WHERE m.chat_id=c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+      FROM claude_chats c
+      WHERE c.user_id=$1
+      ORDER BY c.updated_at DESC
+      LIMIT 30
+    `, [req.telegramUser.id]);
+    res.json({ chats: result.rows });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/claude/chats", authenticate, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      INSERT INTO claude_chats(user_id, title) VALUES($1,'Новый диалог')
+      RETURNING id, title, updated_at
+    `, [req.telegramUser.id]);
+    res.status(201).json({ chat: result.rows[0] });
+  } catch (error) { next(error); }
+});
+
+app.get("/api/claude/chats/:id", authenticate, async (req, res, next) => {
+  try {
+    const chatId = Number(req.params.id);
+    if (!Number.isSafeInteger(chatId) || chatId < 1) {
+      return res.status(400).json({ error: "Неверный номер диалога" });
+    }
+    const chat = await pool.query(
+      "SELECT id,title FROM claude_chats WHERE id=$1 AND user_id=$2",
+      [chatId, req.telegramUser.id]
+    );
+    if (!chat.rowCount) return res.status(404).json({ error: "Диалог не найден" });
+    const messages = await pool.query(`
+      SELECT role,content,created_at FROM claude_messages
+      WHERE chat_id=$1 AND user_id=$2
+      ORDER BY created_at ASC,id ASC
+      LIMIT 100
+    `, [chatId, req.telegramUser.id]);
+    res.json({ chat: chat.rows[0], messages: messages.rows });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/claude/chats/:id/messages", authenticate, async (req, res, next) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: "Claude ещё не подключён. Добавь ANTHROPIC_API_KEY в настройки Render." });
+    }
+    const chatId = Number(req.params.id);
+    const content = String(req.body?.content || "").trim();
+    if (!Number.isSafeInteger(chatId) || chatId < 1) {
+      return res.status(400).json({ error: "Неверный номер диалога" });
+    }
+    if (!content || content.length > 4000) {
+      return res.status(400).json({ error: "Сообщение должно содержать от 1 до 4000 символов." });
+    }
+
+    const chat = await pool.query(
+      "SELECT id,title FROM claude_chats WHERE id=$1 AND user_id=$2",
+      [chatId, req.telegramUser.id]
+    );
+    if (!chat.rowCount) return res.status(404).json({ error: "Диалог не найден" });
+
+    const usage = await pool.query(`
+      SELECT COUNT(*)::int AS used FROM claude_messages
+      WHERE user_id=$1 AND role='user'
+        AND created_at >= date_trunc('day', NOW())
+    `, [req.telegramUser.id]);
+    if (usage.rows[0].used >= CLAUDE_DAILY_LIMIT) {
+      return res.status(429).json({ error: "На сегодня бесплатный лимит исчерпан. Попробуй завтра." });
+    }
+
+    const history = await pool.query(`
+      SELECT role,content FROM claude_messages
+      WHERE chat_id=$1 AND user_id=$2
+      ORDER BY created_at DESC,id DESC LIMIT 20
+    `, [chatId, req.telegramUser.id]);
+    const messages = history.rows.reverse().map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+    messages.push({ role: "user", content });
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 1200,
+        system: "Ты — полезный, дружелюбный AI-помощник внутри приложения FRAME. Отвечай на языке пользователя, ясно и по делу.",
+        messages
+      }),
+      signal: AbortSignal.timeout(60000)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("Claude API error", response.status, data?.error?.type || "unknown");
+      if (response.status === 401) return res.status(502).json({ error: "Ключ Claude API не принят. Проверь ANTHROPIC_API_KEY в Render." });
+      if (response.status === 429) return res.status(503).json({ error: "Claude API временно перегружен или исчерпан лимит оплаты. Попробуй позже." });
+      return res.status(502).json({ error: "Claude временно не смог ответить. Попробуй ещё раз." });
+    }
+    const answer = (Array.isArray(data.content) ? data.content : [])
+      .filter(block => block.type === "text")
+      .map(block => block.text)
+      .join("\\n")
+      .trim();
+    if (!answer) return res.status(502).json({ error: "Claude вернул пустой ответ. Попробуй ещё раз." });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "INSERT INTO claude_messages(chat_id,user_id,role,content) VALUES($1,$2,'user',$3)",
+        [chatId, req.telegramUser.id, content]
+      );
+      await client.query(
+        "INSERT INTO claude_messages(chat_id,user_id,role,content) VALUES($1,$2,'assistant',$3)",
+        [chatId, req.telegramUser.id, answer]
+      );
+      await client.query(
+        "UPDATE claude_chats SET updated_at=NOW(), title=CASE WHEN title='Новый диалог' THEN LEFT($2,55) ELSE title END WHERE id=$1 AND user_id=$3",
+        [chatId, content, req.telegramUser.id]
+      );
+      await client.query("COMMIT");
+    } catch (dbError) {
+      await client.query("ROLLBACK");
+      throw dbError;
+    } finally { client.release(); }
+
+    res.json({
+      answer,
+      remaining: Math.max(0, CLAUDE_DAILY_LIMIT - usage.rows[0].used - 1)
+    });
+  } catch (error) {
+    if (error.name === "TimeoutError" || error.name === "AbortError") {
+      return res.status(504).json({ error: "Claude отвечает слишком долго. Попробуй ещё раз." });
+    }
+    next(error);
+  }
 });
 
 /* Каталог */
