@@ -825,6 +825,7 @@ async function reconcileStarsPayments(targetUserId = null, notifyUsers = true) {
   const transactions = Array.isArray(history?.transactions) ? history.transactions : [];
   let found = 0;
   let credited = 0;
+  let creditedCrystals = 0;
 
   for (const tx of transactions) {
     const source = tx?.source;
@@ -860,6 +861,7 @@ async function reconcileStarsPayments(targetUserId = null, notifyUsers = true) {
 
     if (result.credited) {
       credited += 1;
+      creditedCrystals += pack.crystals;
       if (notifyUsers) {
         try {
           await bot.telegram.sendMessage(
@@ -875,7 +877,7 @@ async function reconcileStarsPayments(targetUserId = null, notifyUsers = true) {
     }
   }
 
-  return { scanned: transactions.length, found, credited };
+  return { scanned: transactions.length, found, credited, creditedCrystals };
 }
 
 /* Диагностика каждого подтверждённого платёжного Update */
@@ -963,7 +965,7 @@ bot.command("paysupport", async (ctx) => {
     const crystals = balance.rows[0]?.crystals ?? 0;
 
     if (result.credited > 0) {
-      await ctx.reply(\`✅ Нашёл оплату и начислил \${result.credited * 3} кристалла(ов). Текущий баланс: \${crystals} 💎\`);
+      await ctx.reply(\`✅ Нашёл оплату и начислил \${result.creditedCrystals} кристаллов. Текущий баланс: \${crystals} 💎\`);
     } else if (result.found > 0) {
       await ctx.reply(\`Платёж найден, но уже был учтён ранее. Текущий баланс: \${crystals} 💎\`);
     } else {
