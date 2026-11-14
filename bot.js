@@ -447,7 +447,7 @@ app.post("/api/creator/generate", authenticate, (_req, res) => {
 
 /* Claude AI chat — личные диалоги пользователей FRAME */
 const CLAUDE_DAILY_LIMIT = 5;
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5-5";
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5";
 
 app.get("/api/claude/status", authenticate, async (req, res, next) => {
   try {
