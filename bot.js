@@ -98,18 +98,6 @@ function validatePrompts() {
 
 async function initDatabase() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS ai_creations (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
-      user_prompt TEXT NOT NULL,
-      result TEXT,
-      status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending','completed','failed')),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_ai_creations_user_date
-      ON ai_creations(user_id, created_at DESC);
-
     CREATE TABLE IF NOT EXISTS limited_offers (
       offer_key TEXT PRIMARY KEY,
       expires_at TIMESTAMPTZ NOT NULL
@@ -155,6 +143,18 @@ async function initDatabase() {
 
     ALTER TABLE users
       ALTER COLUMN legacy_balance_migrated SET DEFAULT TRUE;
+
+    CREATE TABLE IF NOT EXISTS ai_creations (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
+      user_prompt TEXT NOT NULL,
+      result TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','completed','failed')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_creations_user_date
+      ON ai_creations(user_id, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS prompts (
       id INTEGER PRIMARY KEY,
