@@ -132,6 +132,22 @@ body{background:radial-gradient(ellipse at 12% 4%,#593c8c55,transparent 36%),rad
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 
 
+/* Каталог: улучшенные стеклянные карточки */
+.prompt{position:relative;min-height:76px;gap:11px;padding:13px 12px;border-radius:19px;background:linear-gradient(115deg,rgba(195,165,255,.105),rgba(255,255,255,.035) 58%,rgba(130,225,255,.045));border-color:rgba(220,202,255,.22);}
+.prompt:before{content:"";position:absolute;inset:0 auto 0 0;width:2px;border-radius:3px;background:linear-gradient(180deg,#d7c2ff,#83e9ff);opacity:.45;}
+.prompt .picon{width:46px;height:46px;flex:none;font-size:21px;background:linear-gradient(145deg,rgba(191,155,255,.3),rgba(111,218,245,.12));border:1px solid rgba(226,210,255,.25);}
+.prompt .pinfo{display:flex;flex-direction:column;justify-content:center;gap:5px;}
+.prompt .pinfo b{font-size:13px;line-height:1.35;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.prompt .pinfo small{font-size:10px;line-height:1.25;color:#aaa2c2;}
+.prompt-end{display:flex;flex:none;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px;max-width:36%;}
+.prompt-state{display:inline-flex;align-items:center;justify-content:center;max-width:100%;padding:6px 8px;border:1px solid transparent;border-radius:9px;font-size:9px;line-height:1.2;font-weight:850;white-space:nowrap;}
+.prompt-state.free{color:#a8f1df;background:rgba(93,220,185,.11);border-color:rgba(116,235,202,.2);}
+.prompt-state.paid{color:#e8d8ff;background:rgba(185,154,255,.13);border-color:rgba(204,177,255,.2);}
+.prompt-state.opened{color:#b7e9ff;background:rgba(115,206,255,.11);border-color:rgba(137,219,255,.2);}
+.prompt-chevron{color:#b9a7e8;font-size:20px;line-height:12px;opacity:.8;}
+.prompt:active{transform:scale(.985);border-color:#c7aaff88;}
+@media(max-width:360px){.prompt{gap:8px;padding:11px 9px}.prompt .picon{width:41px;height:41px}.prompt-end{max-width:39%}.prompt-state{font-size:8px;padding:6px 6px}}
+
 /* FRAME storefront polish */
 .wrap{padding-top:calc(14px + env(safe-area-inset-top));padding-bottom:36px}
 .top{margin:5px 0 20px}.brand{font-size:27px;letter-spacing:5px;text-shadow:0 0 24px #b99aff35}
@@ -252,7 +268,7 @@ async function loadPrompts(category="",q=""){
   list.innerHTML='<div class="empty">Не удалось загрузить каталог.<br><button class="action secondary" onclick="loadPrompts(currentCategory,document.getElementById(\'search\').value)">Повторить</button></div>';
  }
 }
-function renderList(items,target){const el=document.getElementById(target);const shown=target==="promptList"?items.filter(p=>promptFilter==="all"||(promptFilter==="free"?p.is_free:!p.is_free)):items;if(!shown.length){el.innerHTML='<div class="empty">Подходящих промптов пока нет</div>';return}el.innerHTML=shown.map(p=>`<button class="prompt" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="price ${p.is_free?"free":""}">${p.unlocked?"Открыт":p.is_free?"Бесплатно":"✧ "+p.price}</span></button>`).join("")}
+function renderList(items,target){const el=document.getElementById(target);const shown=target==="promptList"?items.filter(p=>promptFilter==="all"||(promptFilter==="free"?p.is_free:!p.is_free)):items;if(!shown.length){el.innerHTML='<div class="empty">Подходящих промптов пока нет</div>';return}el.innerHTML=shown.map(p=>{const state=p.unlocked?'<span class="prompt-state opened">Открыт</span>':p.is_free?'<span class="prompt-state free">Бесплатно</span>':`<span class="prompt-state paid">✧ ${Number(p.price)||1} кристалл</span>`;return `<button class="prompt" type="button" onclick="openPrompt(${p.id})"><span class="picon">${catData.find(c=>c[0]===p.category)?.[1]||"✧"}</span><span class="pinfo"><b>${escapeHtml(p.title)}</b><small>${escapeHtml(p.category)}</small></span><span class="prompt-end">${state}<span class="prompt-chevron" aria-hidden="true">›</span></span></button>`}).join("")}
 function setPromptFilter(value,button){promptFilter=value;document.querySelectorAll(".filter").forEach(x=>x.classList.toggle("active",x===button));renderList(allPrompts,"promptList")}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function selectCategory(c){if(!catData.some(item=>item[0]===c))return;currentCategory=c;const search=document.getElementById("search");if(search)search.value="";++searchRequest;renderCategories();document.getElementById("listTitle").textContent=c;document.getElementById("listCount").textContent="99 промптов";loadPrompts(c,"");requestAnimationFrame(()=>document.getElementById("promptList").scrollIntoView({behavior:"smooth",block:"start"}))}
