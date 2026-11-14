@@ -194,6 +194,7 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS provider_charge_id TEXT,
       ADD COLUMN IF NOT EXISTS stars INTEGER,
       ADD COLUMN IF NOT EXISTS crystals INTEGER,
+      ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'paid',
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -785,9 +786,9 @@ async function creditStarsPayment({ userId, username, firstName, chargeId, provi
 
     const inserted = await client.query(
       `INSERT INTO payments(
-         user_id, telegram_charge_id, provider_charge_id, stars, crystals, status
+         user_id, telegram_charge_id, provider_charge_id, stars, crystals, amount, status
        )
-       VALUES($1,$2,$3,$4,$5,'paid')
+       VALUES($1,$2,$3,$4,$5,$4,'paid')
        ON CONFLICT(telegram_charge_id) DO NOTHING
        RETURNING id`,
       [userId, chargeId, providerChargeId || null, pack.stars, pack.crystals]
