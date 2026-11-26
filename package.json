@@ -1,8 +1,8 @@
- {
-   "name": "frame-telegram-miniapp",
+{
+  "name": "signal-ai-telegram",
   "version": "1.0.0",
   "private": true,
-  "description": "FRAME Telegram prompt shop",
+  "description": "SIGNAL AI — Telegram trading-signal analytics app for Pocket Option market data",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
