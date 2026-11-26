@@ -1,1327 +1,195 @@
 const express = require("express");
 const { Telegraf, Markup } = require("telegraf");
-const { Pool } = require("pg");
 const crypto = require("crypto");
 const path = require("path");
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 10000);
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const DATABASE_URL = process.env.DATABASE_URL;
 const MINI_APP_URL = process.env.MINI_APP_URL;
-const PURCHASES_ENABLED = true;
+const OTCHARTS_API_KEY = process.env.OTCHARTS_API_KEY;
 
 if (!BOT_TOKEN) throw new Error("Не задан BOT_TOKEN");
-if (!DATABASE_URL) throw new Error("Не задан DATABASE_URL");
 if (!MINI_APP_URL) throw new Error("Не задан MINI_APP_URL");
 
 const bot = new Telegraf(BOT_TOKEN);
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: process.env.PGSSLMODE === "disable"
-    ? false
-    : { rejectUnauthorized: false },
-  max: 10,
-  connectionTimeoutMillis: 10000
-});
-
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "32kb" }));
 app.use(express.static(__dirname));
 
-const CATEGORIES = [
-  "Страшные истории",
-  "Представь, если…",
-  "Ночные правила",
-  "Тайны и загадки"
-];
-
-const PACKS = {
-  pack10: { stars: 10, crystals: 10, title: "10 кристаллов" },
-  pack50: { stars: 45, crystals: 50, title: "50 кристаллов" },
-  pack100: { stars: 80, crystals: 100, title: "100 кристаллов" },
-  pack3: { stars: 3, crystals: 3, title: "Временный мини-пак" }
-};
-
-const PROMPTS = require("./prompts.json");
-
-function validatePrompts() {
-  if (!Array.isArray(PROMPTS) || PROMPTS.length !== 396) {
-    throw new Error("prompts.json должен содержать ровно 396 промптов");
-  }
-
-  const counts = Object.fromEntries(
-    CATEGORIES.map(category => [
-      category,
-      PROMPTS.filter(p => p.category === category).length
-    ])
-  );
-
-  for (const category of CATEGORIES) {
-    if (counts[category] !== 99) {
-      throw new Error(`В категории ${category} должно быть 99 промптов`);
-    }
-
-    const free = PROMPTS.filter(
-      p => p.category === category && p.is_free === true
-    );
-
-    if (free.length !== 1) {
-      throw new Error(
-        `В категории ${category} должен быть ровно один бесплатный промпт`
-      );
-    }
-  }
-
-  for (const p of PROMPTS) {
-    if (
-      !p.title ||
-      !p.category ||
-      !p.full_prompt ||
-      !CATEGORIES.includes(p.category)
-    ) {
-      throw new Error("В prompts.json обнаружен некорректный промпт");
-    }
-
-    if (
-      typeof p.price !== "number" ||
-      p.price < 0 ||
-      !Number.isInteger(p.price)
-    ) {
-      throw new Error("Некорректная цена промпта");
-    }
-  }
-
-  console.log("Промпты проверены: 396, из них 4 бесплатных.");
-}
-
-async function initDatabase() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS limited_offers (
-      offer_key TEXT PRIMARY KEY,
-      expires_at TIMESTAMPTZ NOT NULL
-    );
-    INSERT INTO limited_offers(offer_key, expires_at)
-    VALUES ('mini_pack_3', NOW() + INTERVAL '15 minutes')
-    ON CONFLICT (offer_key) DO NOTHING;
-
-    CREATE TABLE IF NOT EXISTS users (
-      telegram_id BIGINT PRIMARY KEY,
-      username TEXT,
-      first_name TEXT NOT NULL DEFAULT '',
-      crystals INTEGER NOT NULL DEFAULT 0
-        CHECK (crystals >= 0),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-
-    ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS first_name TEXT NOT NULL DEFAULT '',
-      ADD COLUMN IF NOT EXISTS crystals INTEGER NOT NULL DEFAULT 0 CHECK (crystals >= 0),
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS legacy_balance_migrated BOOLEAN NOT NULL DEFAULT FALSE;
-
-    DO $migrate$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = 'users'
-          AND column_name = 'balance'
-      ) THEN
-        UPDATE users
-        SET crystals = GREATEST(balance, 0),
-            legacy_balance_migrated = TRUE
-        WHERE legacy_balance_migrated = FALSE;
-      ELSE
-        UPDATE users
-        SET legacy_balance_migrated = TRUE
-        WHERE legacy_balance_migrated = FALSE;
-      END IF;
-    END $migrate$;
-
-    ALTER TABLE users
-      ALTER COLUMN legacy_balance_migrated SET DEFAULT TRUE;
-
-    CREATE TABLE IF NOT EXISTS claude_chats (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
-      title TEXT NOT NULL DEFAULT 'Новый диалог',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_claude_chats_user_date
-      ON claude_chats(user_id, updated_at DESC);
-
-    CREATE TABLE IF NOT EXISTS claude_messages (
-      id BIGSERIAL PRIMARY KEY,
-      chat_id BIGINT NOT NULL REFERENCES claude_chats(id) ON DELETE CASCADE,
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
-      role TEXT NOT NULL CHECK (role IN ('user','assistant')),
-      content TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_claude_messages_chat_date
-      ON claude_messages(chat_id, created_at ASC);
-
-    CREATE TABLE IF NOT EXISTS ai_creations (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
-      user_prompt TEXT NOT NULL,
-      result TEXT,
-      status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending','completed','failed')),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_ai_creations_user_date
-      ON ai_creations(user_id, created_at DESC);
-
-    CREATE TABLE IF NOT EXISTS prompts (
-      id INTEGER PRIMARY KEY,
-      category TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      full_prompt TEXT NOT NULL,
-      is_free BOOLEAN NOT NULL DEFAULT FALSE,
-      price INTEGER NOT NULL DEFAULT 1
-        CHECK (price >= 0),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-
-    CREATE TABLE IF NOT EXISTS unlocks (
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id)
-        ON DELETE CASCADE,
-      prompt_id INTEGER NOT NULL REFERENCES prompts(id)
-        ON DELETE CASCADE,
-      unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (user_id, prompt_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS favorites (
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id)
-        ON DELETE CASCADE,
-      prompt_id INTEGER NOT NULL REFERENCES prompts(id)
-        ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (user_id, prompt_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS payments (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(telegram_id)
-        ON DELETE CASCADE,
-      telegram_charge_id TEXT UNIQUE NOT NULL,
-      provider_charge_id TEXT,
-      stars INTEGER NOT NULL,
-      crystals INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'paid',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-
-    -- Safe migration for databases where payments existed before Stars support.
-    -- Existing rows are preserved; NULL charge IDs are allowed for legacy records.
-    ALTER TABLE payments
-      ADD COLUMN IF NOT EXISTS user_id BIGINT,
-      ADD COLUMN IF NOT EXISTS telegram_charge_id TEXT,
-      ADD COLUMN IF NOT EXISTS provider_charge_id TEXT,
-      ADD COLUMN IF NOT EXISTS stars INTEGER,
-      ADD COLUMN IF NOT EXISTS crystals INTEGER,
-      ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'XTR',
-      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'paid',
-      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-    CREATE UNIQUE INDEX IF NOT EXISTS payments_telegram_charge_id_uidx
-      ON payments(telegram_charge_id);
-
-    ALTER TABLE prompts
-      ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
-
-    ALTER TABLE prompts
-      ADD COLUMN IF NOT EXISTS is_free BOOLEAN NOT NULL DEFAULT FALSE;
-
-    ALTER TABLE prompts
-      ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 1;
-
-    ALTER TABLE unlocks
-      ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-    CREATE INDEX IF NOT EXISTS idx_prompts_category
-      ON prompts(category);
-
-    CREATE INDEX IF NOT EXISTS idx_unlocks_user
-      ON unlocks(user_id, unlocked_at DESC);
-
-    CREATE INDEX IF NOT EXISTS idx_favorites_user
-      ON favorites(user_id);
-  `);
-
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    for (let i = 0; i < PROMPTS.length; i++) {
-      const p = PROMPTS[i];
-
-      await client.query(`
-        INSERT INTO prompts(
-          id, category, title, description,
-          full_prompt, is_free, price
-        )
-        VALUES($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT(id) DO UPDATE SET
-          category=EXCLUDED.category,
-          title=EXCLUDED.title,
-          description=EXCLUDED.description,
-          full_prompt=EXCLUDED.full_prompt,
-          is_free=EXCLUDED.is_free,
-          price=EXCLUDED.price
-      `, [
-        i + 1,
-        p.category,
-        p.title,
-        p.description || "",
-        p.full_prompt,
-        p.is_free,
-        p.is_free ? 0 : p.price
-      ]);
-    }
-
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  console.log("PostgreSQL подключена, промпты загружены.");
-}
-
-/* Проверка подлинности Telegram Mini App */
+const ALLOWED_SYMBOLS = new Set([
+  "EURUSD_otc","GBPUSD_otc","USDJPY_otc","AUDUSD_otc","USDCAD_otc",
+  "EURGBP_otc","EURJPY_otc","GBPJPY_otc","NZDUSD_otc","USDCHF_otc",
+  "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","EURGBP","EURJPY","GBPJPY"
+]);
+const TIMEFRAMES = new Set([60, 300, 900]);
+const cache = new Map();
+const CACHE_MS = 12000;
 
 function verifyTelegramData(initData) {
-  if (!initData || typeof initData !== "string") {
-    return null;
-  }
-
+  if (!initData || typeof initData !== "string" || !BOT_TOKEN) return null;
   const params = new URLSearchParams(initData);
-  const receivedHash = params.get("hash");
-
-  if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) {
-    return null;
-  }
-
+  const hash = params.get("hash");
+  if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) return null;
   params.delete("hash");
-
-  const dataCheckString = [...params.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("\n");
-
-  const secretKey = crypto
-    .createHmac("sha256", "WebAppData")
-    .update(BOT_TOKEN)
-    .digest();
-
-  const calculatedHash = crypto
-    .createHmac("sha256", secretKey)
-    .update(dataCheckString)
-    .digest();
-
-  const receivedBuffer = Buffer.from(receivedHash, "hex");
-
-  if (
-    calculatedHash.length !== receivedBuffer.length ||
-    !crypto.timingSafeEqual(calculatedHash, receivedBuffer)
-  ) {
-    return null;
-  }
-
+  const check = [...params.entries()].sort(([a],[b]) => a.localeCompare(b))
+    .map(([k,v]) => `${k}=${v}`).join("\n");
+  const secret = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
+  const expected = crypto.createHmac("sha256", secret).update(check).digest();
+  const received = Buffer.from(hash, "hex");
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) return null;
   const authDate = Number(params.get("auth_date"));
-
-  if (
-    !Number.isFinite(authDate) ||
-    authDate <= 0 ||
-    Date.now() / 1000 - authDate > 86400 ||
-    authDate - Date.now() / 1000 > 60
-  ) {
-    return null;
-  }
-
+  if (!Number.isFinite(authDate) || authDate <= 0 || Date.now()/1000-authDate > 86400 || authDate-Date.now()/1000 > 60) return null;
   try {
     const user = JSON.parse(params.get("user") || "{}");
-    return Number.isSafeInteger(user.id) && user.id > 0
-      ? user
-      : null;
-  } catch {
-    return null;
-  }
+    return Number.isSafeInteger(user.id) && user.id > 0 ? user : null;
+  } catch { return null; }
 }
 
-async function authenticate(req, res, next) {
-  try {
-    const user = verifyTelegramData(
-      req.get("X-Telegram-Init-Data")
-    );
-
-    if (!user) {
-      return res.status(401).json({
-        error: "Откройте FRAME через Telegram"
-      });
-    }
-
-    await pool.query(`
-      INSERT INTO users(telegram_id, username, first_name)
-      VALUES($1,$2,$3)
-      ON CONFLICT(telegram_id) DO UPDATE SET
-        username=EXCLUDED.username,
-        first_name=EXCLUDED.first_name,
-        updated_at=NOW()
-    `, [
-      user.id,
-      user.username || null,
-      user.first_name || ""
-    ]);
-
-    req.telegramUser = user;
-    next();
-  } catch (error) {
-    next(error);
-  }
+function authenticate(req,res,next) {
+  const user = verifyTelegramData(req.get("X-Telegram-Init-Data"));
+  if (!user) return res.status(401).json({ error: "Открой SIGNAL AI через Telegram." });
+  req.telegramUser = user;
+  next();
 }
 
-/* Проверка сервера */
-
-app.get("/health", async (_req, res) => {
-  try {
-    await pool.query("SELECT 1");
-    res.json({ ok: true, service: "FRAME", database: "connected" });
-  } catch (error) {
-    console.error("Health check database error:", error);
-    res.status(503).json({ ok: false, service: "FRAME", database: "disconnected" });
-  }
-});
-
-app.get("/", (_req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-/* Профиль */
-
-app.get("/api/me", authenticate, async (req, res, next) => {
-  try {
-    const id = req.telegramUser.id;
-
-    const user = await pool.query(`
-      SELECT telegram_id, username, first_name, crystals
-      FROM users
-      WHERE telegram_id=$1
-    `, [id]);
-
-    const opened = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM unlocks
-      WHERE user_id=$1
-    `, [id]);
-
-    res.json({
-      user: user.rows[0],
-      opened: opened.rows[0].count
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/* AI Creator отключён: генерация сценариев и обращения к внешним AI API выключены. */
-app.get("/api/creator/status", authenticate, (_req, res) => {
-  res.status(503).json({ error: "AI Creator временно отключён." });
-});
-app.post("/api/creator/generate", authenticate, (_req, res) => {
-  res.status(503).json({ error: "AI Creator временно отключён." });
-});
-
-
-/* Claude AI chat — личные диалоги пользователей FRAME */
-const CLAUDE_DAILY_LIMIT = 5;
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5";
-
-app.get("/api/claude/status", authenticate, async (req, res, next) => {
-  try {
-    const usage = await pool.query(`
-      SELECT COUNT(*)::int AS used
-      FROM claude_messages
-      WHERE user_id=$1 AND role='user'
-        AND created_at >= date_trunc('day', NOW())
-    `, [req.telegramUser.id]);
-    const used = usage.rows[0].used;
-    res.json({
-      used,
-      limit: CLAUDE_DAILY_LIMIT,
-      remaining: Math.max(0, CLAUDE_DAILY_LIMIT - used),
-      configured: Boolean(process.env.ANTHROPIC_API_KEY)
-    });
-  } catch (error) { next(error); }
-});
-
-app.get("/api/claude/chats", authenticate, async (req, res, next) => {
-  try {
-    const result = await pool.query(`
-      SELECT c.id, c.title, c.updated_at,
-        (SELECT content FROM claude_messages m WHERE m.chat_id=c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
-      FROM claude_chats c
-      WHERE c.user_id=$1
-      ORDER BY c.updated_at DESC
-      LIMIT 30
-    `, [req.telegramUser.id]);
-    res.json({ chats: result.rows });
-  } catch (error) { next(error); }
-});
-
-app.post("/api/claude/chats", authenticate, async (req, res, next) => {
-  try {
-    const result = await pool.query(`
-      INSERT INTO claude_chats(user_id, title) VALUES($1,'Новый диалог')
-      RETURNING id, title, updated_at
-    `, [req.telegramUser.id]);
-    res.status(201).json({ chat: result.rows[0] });
-  } catch (error) { next(error); }
-});
-
-app.get("/api/claude/chats/:id", authenticate, async (req, res, next) => {
-  try {
-    const chatId = Number(req.params.id);
-    if (!Number.isSafeInteger(chatId) || chatId < 1) {
-      return res.status(400).json({ error: "Неверный номер диалога" });
-    }
-    const chat = await pool.query(
-      "SELECT id,title FROM claude_chats WHERE id=$1 AND user_id=$2",
-      [chatId, req.telegramUser.id]
-    );
-    if (!chat.rowCount) return res.status(404).json({ error: "Диалог не найден" });
-    const messages = await pool.query(`
-      SELECT role,content,created_at FROM claude_messages
-      WHERE chat_id=$1 AND user_id=$2
-      ORDER BY created_at ASC,id ASC
-      LIMIT 100
-    `, [chatId, req.telegramUser.id]);
-    res.json({ chat: chat.rows[0], messages: messages.rows });
-  } catch (error) { next(error); }
-});
-
-app.post("/api/claude/chats/:id/messages", authenticate, async (req, res, next) => {
-  try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ error: "Claude ещё не подключён. Добавь ANTHROPIC_API_KEY в настройки Render." });
-    }
-    const chatId = Number(req.params.id);
-    const content = String(req.body?.content || "").trim();
-    if (!Number.isSafeInteger(chatId) || chatId < 1) {
-      return res.status(400).json({ error: "Неверный номер диалога" });
-    }
-    if (!content || content.length > 4000) {
-      return res.status(400).json({ error: "Сообщение должно содержать от 1 до 4000 символов." });
-    }
-
-    const chat = await pool.query(
-      "SELECT id,title FROM claude_chats WHERE id=$1 AND user_id=$2",
-      [chatId, req.telegramUser.id]
-    );
-    if (!chat.rowCount) return res.status(404).json({ error: "Диалог не найден" });
-
-    const usage = await pool.query(`
-      SELECT COUNT(*)::int AS used FROM claude_messages
-      WHERE user_id=$1 AND role='user'
-        AND created_at >= date_trunc('day', NOW())
-    `, [req.telegramUser.id]);
-    if (usage.rows[0].used >= CLAUDE_DAILY_LIMIT) {
-      return res.status(429).json({ error: "На сегодня бесплатный лимит исчерпан. Попробуй завтра." });
-    }
-
-    const history = await pool.query(`
-      SELECT role,content FROM claude_messages
-      WHERE chat_id=$1 AND user_id=$2
-      ORDER BY created_at DESC,id DESC LIMIT 20
-    `, [chatId, req.telegramUser.id]);
-    const messages = history.rows.reverse().map(m => ({
-      role: m.role,
-      content: m.content
-    }));
-    messages.push({ role: "user", content });
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 1200,
-        system: "Ты — полезный, дружелюбный AI-помощник внутри приложения FRAME. Отвечай на языке пользователя, ясно и по делу.",
-        messages
-      }),
-      signal: AbortSignal.timeout(60000)
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      console.error("Claude API error", response.status, data?.error?.type || "unknown");
-      if (response.status === 401) return res.status(502).json({ error: "Ключ Claude API не принят. Проверь ANTHROPIC_API_KEY в Render." });
-      if (response.status === 429) return res.status(503).json({ error: "Claude API временно перегружен или исчерпан лимит оплаты. Попробуй позже." });
-      return res.status(502).json({ error: "Claude временно не смог ответить. Попробуй ещё раз." });
-    }
-    const answer = (Array.isArray(data.content) ? data.content : [])
-      .filter(block => block.type === "text")
-      .map(block => block.text)
-      .join("\\n")
-      .trim();
-    if (!answer) return res.status(502).json({ error: "Claude вернул пустой ответ. Попробуй ещё раз." });
-
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        "INSERT INTO claude_messages(chat_id,user_id,role,content) VALUES($1,$2,'user',$3)",
-        [chatId, req.telegramUser.id, content]
-      );
-      await client.query(
-        "INSERT INTO claude_messages(chat_id,user_id,role,content) VALUES($1,$2,'assistant',$3)",
-        [chatId, req.telegramUser.id, answer]
-      );
-      await client.query(
-        "UPDATE claude_chats SET updated_at=NOW(), title=CASE WHEN title='Новый диалог' THEN LEFT($2,55) ELSE title END WHERE id=$1 AND user_id=$3",
-        [chatId, content, req.telegramUser.id]
-      );
-      await client.query("COMMIT");
-    } catch (dbError) {
-      await client.query("ROLLBACK");
-      throw dbError;
-    } finally { client.release(); }
-
-    res.json({
-      answer,
-      remaining: Math.max(0, CLAUDE_DAILY_LIMIT - usage.rows[0].used - 1)
-    });
-  } catch (error) {
-    if (error.name === "TimeoutError" || error.name === "AbortError") {
-      return res.status(504).json({ error: "Claude отвечает слишком долго. Попробуй ещё раз." });
-    }
-    next(error);
-  }
-});
-
-/* Каталог */
-
-app.get("/api/prompts", authenticate, async (req, res, next) => {
-  try {
-    const values = [req.telegramUser.id];
-    let conditions = "";
-
-    if (req.query.category) {
-      if (!CATEGORIES.includes(req.query.category)) {
-        return res.status(400).json({
-          error: "Неизвестная категория"
-        });
-      }
-
-      values.push(req.query.category);
-      conditions += ` AND p.category=$${values.length}`;
-    }
-
-    const search = String(req.query.q || "").trim().slice(0, 100);
-
-    if (search) {
-      values.push(`%${search}%`);
-      conditions += `
-        AND (
-          p.title ILIKE $${values.length}
-          OR p.description ILIKE $${values.length}
-        )
-      `;
-    }
-
-    const result = await pool.query(`
-      SELECT
-        p.id,p.category,p.title,p.description,
-        p.is_free,p.price,
-        (
-          p.is_free OR EXISTS(
-            SELECT 1 FROM unlocks u
-            WHERE u.user_id=$1 AND u.prompt_id=p.id
-          )
-        ) AS unlocked,
-        EXISTS(
-          SELECT 1 FROM favorites f
-          WHERE f.user_id=$1 AND f.prompt_id=p.id
-        ) AS favorite
-      FROM prompts p
-      WHERE TRUE ${conditions}
-      ORDER BY p.id
-    `, values);
-
-    res.json({
-      prompts: result.rows,
-      categories: CATEGORIES
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/* Получение полного текста */
-
-app.get("/api/prompt/:id", authenticate, async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id < 1) {
-      return res.status(400).json({
-        error: "Неверный номер промпта"
-      });
-    }
-
-    const result = await pool.query(`
-      SELECT p.*
-      FROM prompts p
-      WHERE p.id=$2
-      AND (
-        p.is_free OR EXISTS(
-          SELECT 1 FROM unlocks u
-          WHERE u.user_id=$1 AND u.prompt_id=p.id
-        )
-      )
-    `, [req.telegramUser.id, id]);
-
-    if (!result.rowCount) {
-      return res.status(403).json({
-        error: "Промпт не открыт или не существует"
-      });
-    }
-
-    res.json({ prompt: result.rows[0] });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/* Покупка промпта */
-
-app.post("/api/unlock", authenticate, async (req, res, next) => {
-  if (!PURCHASES_ENABLED) return res.status(503).json({ error: "Покупки пока не подключены" });
-  const promptId = Number(req.body.promptId);
-
-  if (!Number.isInteger(promptId) || promptId < 1) {
-    return res.status(400).json({
-      error: "Неверный номер промпта"
-    });
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const prompt = await client.query(`
-      SELECT id,is_free,price
-      FROM prompts
-      WHERE id=$1
-      FOR SHARE
-    `, [promptId]);
-
-    if (!prompt.rowCount) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({
-        error: "Промпт не найден"
-      });
-    }
-
-    const already = await client.query(`
-      SELECT 1 FROM unlocks
-      WHERE user_id=$1 AND prompt_id=$2
-    `, [req.telegramUser.id, promptId]);
-
-    if (already.rowCount) {
-      await client.query("COMMIT");
-
-      const balance = await pool.query(
-        "SELECT crystals FROM users WHERE telegram_id=$1",
-        [req.telegramUser.id]
-      );
-
-      return res.json({
-        ok: true,
-        already: true,
-        crystals: balance.rows[0].crystals
-      });
-    }
-
-    const price = prompt.rows[0].is_free
-      ? 0
-      : prompt.rows[0].price;
-
-    const user = await client.query(`
-      SELECT crystals
-      FROM users
-      WHERE telegram_id=$1
-      FOR UPDATE
-    `, [req.telegramUser.id]);
-
-    if (!user.rowCount) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({
-        error: "Пользователь не найден"
-      });
-    }
-
-    if (user.rows[0].crystals < price) {
-      await client.query("ROLLBACK");
-      return res.status(402).json({
-        error: "Недостаточно кристаллов"
-      });
-    }
-
-    if (price > 0) {
-      await client.query(`
-        UPDATE users
-        SET crystals=crystals-$2,updated_at=NOW()
-        WHERE telegram_id=$1
-      `, [req.telegramUser.id, price]);
-    }
-
-    await client.query(`
-      INSERT INTO unlocks(user_id,prompt_id)
-      VALUES($1,$2)
-      ON CONFLICT DO NOTHING
-    `, [req.telegramUser.id, promptId]);
-
-    const updated = await client.query(
-      "SELECT crystals FROM users WHERE telegram_id=$1",
-      [req.telegramUser.id]
-    );
-
-    await client.query("COMMIT");
-
-    res.json({
-      ok: true,
-      crystals: updated.rows[0].crystals
-    });
-  } catch (error) {
-    await client.query("ROLLBACK");
-    next(error);
-  } finally {
-    client.release();
-  }
-});
-
-/* Избранное */
-
-app.get("/api/favorites", authenticate, async (req, res, next) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        p.id,p.category,p.title,p.description,
-        p.is_free,p.price,
-        (
-          p.is_free OR EXISTS(
-            SELECT 1 FROM unlocks u
-            WHERE u.user_id=$1 AND u.prompt_id=p.id
-          )
-        ) AS unlocked,
-        TRUE AS favorite
-      FROM favorites f
-      JOIN prompts p ON p.id=f.prompt_id
-      WHERE f.user_id=$1
-      ORDER BY f.created_at DESC
-    `, [req.telegramUser.id]);
-
-    res.json({ prompts: result.rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/favorites/:id", authenticate, async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id < 1) {
-      return res.status(400).json({
-        error: "Неверный номер промпта"
-      });
-    }
-
-    const prompt = await pool.query(
-      "SELECT id FROM prompts WHERE id=$1",
-      [id]
-    );
-
-    if (!prompt.rowCount) {
-      return res.status(404).json({
-        error: "Промпт не найден"
-      });
-    }
-
-    const deleted = await pool.query(`
-      DELETE FROM favorites
-      WHERE user_id=$1 AND prompt_id=$2
-      RETURNING prompt_id
-    `, [req.telegramUser.id, id]);
-
-    let favorite = false;
-
-    if (!deleted.rowCount) {
-      await pool.query(`
-        INSERT INTO favorites(user_id,prompt_id)
-        VALUES($1,$2)
-        ON CONFLICT DO NOTHING
-      `, [req.telegramUser.id, id]);
-
-      favorite = true;
-    }
-
-    res.json({ favorite });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/* История */
-
-app.get("/api/history", authenticate, async (req, res, next) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        p.id,p.category,p.title,p.description,
-        p.is_free,p.price,TRUE AS unlocked
-      FROM unlocks u
-      JOIN prompts p ON p.id=u.prompt_id
-      WHERE u.user_id=$1
-      ORDER BY u.unlocked_at DESC
-    `, [req.telegramUser.id]);
-
-    res.json({ prompts: result.rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/* Постоянное предложение: мини-пак 3 кристалла за 3 Stars */
-app.get("/api/stars/promo", authenticate, (_req, res) => {
-  res.json({ active: true });
-});
-
-/* Создание платежа Telegram Stars */
-app.post("/api/stars/invoice", authenticate, async (req, res, next) => {
-  if (!PURCHASES_ENABLED) return res.status(503).json({ error: "Покупки через Telegram Stars пока не подключены" });
-  try {
-    const pack = PACKS[req.body.pack];
-
-    if (!pack) {
-      return res.status(400).json({
-        error: "Неизвестный набор кристаллов"
-      });
-    }
-
-    const payload = [
-      "frame",
-      req.telegramUser.id,
-      req.body.pack,
-      crypto.randomUUID()
-    ].join(":");
-
-    const url = await bot.telegram.createInvoiceLink({
-      title: pack.title,
-      description: `Пополнение баланса FRAME: ${pack.crystals} кристаллов`,
-      payload,
-      provider_token: "",
-      currency: "XTR",
-      prices: [
-        {
-          label: pack.title,
-          amount: pack.stars
-        }
-      ]
-    });
-
-    res.json({ url });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/* Проверка платежа до оплаты */
-
-bot.on("pre_checkout_query", async (ctx) => {
-  if (!PURCHASES_ENABLED) {
-    await ctx.answerPreCheckoutQuery(false, "Покупки пока не подключены");
-    return;
-  }
-  try {
-    const query = ctx.update.pre_checkout_query;
-    const parts = String(query.invoice_payload || "").split(":");
-    const pack = PACKS[parts[2]];
-    const valid =
-      parts.length === 4 &&
-      parts[0] === "frame" &&
-      Number(parts[1]) === query.from.id &&
-      pack &&
-      query.currency === "XTR" &&
-      query.total_amount === pack.stars;
-
-    await ctx.answerPreCheckoutQuery(
-      Boolean(valid),
-      valid ? undefined : "Не удалось проверить платёж"
-    );
-  } catch (error) {
-    console.error("Ошибка проверки платежа:", error);
-  }
-});
-
-/* Надёжное начисление Telegram Stars: единый идемпотентный обработчик для Update и сверки истории */
-async function creditStarsPayment({ userId, username, firstName, chargeId, providerChargeId, pack, source }) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO users(telegram_id, username, first_name)
-       VALUES($1,$2,$3)
-       ON CONFLICT(telegram_id) DO UPDATE SET
-         username=COALESCE(EXCLUDED.username, users.username),
-         first_name=CASE WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name ELSE users.first_name END,
-         updated_at=NOW()`,
-      [userId, username || null, firstName || ""]
-    );
-
-    const inserted = await client.query(
-      `INSERT INTO payments(
-         user_id, telegram_charge_id, provider_charge_id, stars, crystals, amount, currency, status
-       )
-       VALUES($1,$2,$3,$4,$5,$4,'XTR','paid')
-       ON CONFLICT(telegram_charge_id) DO NOTHING
-       RETURNING id`,
-      [userId, chargeId, providerChargeId || null, pack.stars, pack.crystals]
-    );
-
-    if (inserted.rowCount === 1) {
-      const updated = await client.query(
-        `UPDATE users
-         SET crystals=crystals+$2, updated_at=NOW()
-         WHERE telegram_id=$1
-         RETURNING crystals`,
-        [userId, pack.crystals]
-      );
-      if (updated.rowCount !== 1) {
-        throw new Error("User balance was not updated for a confirmed Stars payment");
-      }
-      await client.query("COMMIT");
-      console.log("FRAME PAYMENT CREDITED", {
-        userId, pack: pack.key, stars: pack.stars, crystals: pack.crystals,
-        balance: updated.rows[0].crystals, chargeId, source
-      });
-      return { credited: true, balance: updated.rows[0].crystals };
-    }
-
-    const existing = await client.query(
-      "SELECT crystals FROM users WHERE telegram_id=$1",
-      [userId]
-    );
-    await client.query("COMMIT");
-    console.log("FRAME PAYMENT DUPLICATE - already processed", { userId, chargeId, source });
-    return { credited: false, balance: existing.rows[0]?.crystals ?? null };
-  } catch (error) {
-    try { await client.query("ROLLBACK"); } catch (rollbackError) {
-      console.error("FRAME payment rollback failed:", rollbackError);
-    }
+async function otcRequest(endpoint, params = {}) {
+  if (!OTCHARTS_API_KEY) {
+    const error = new Error("Источник котировок пока не подключён. Добавь OTCHARTS_API_KEY в Render.");
+    error.status = 503;
     throw error;
-  } finally {
-    client.release();
   }
-}
-
-/* Telegram StarTransaction.id совпадает с SuccessfulPayment.telegram_payment_charge_id.
-   Сверка истории использует тот же ключ защиты от двойного начисления. */
-async function reconcileStarsPayments(targetUserId = null, notifyUsers = true) {
-  const history = await bot.telegram.callApi("getStarTransactions", {
-    offset: 0,
-    limit: 100
+  const url = new URL(endpoint, "https://otcharts.com");
+  for (const [key,value] of Object.entries(params)) url.searchParams.set(key, String(value));
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${OTCHARTS_API_KEY}`, Accept: "application/json", "User-Agent": "SIGNAL-AI/1.0" },
+    signal: AbortSignal.timeout(12000)
   });
-  const transactions = Array.isArray(history?.transactions) ? history.transactions : [];
-  let found = 0;
-  let credited = 0;
-  let creditedCrystals = 0;
-
-  for (const tx of transactions) {
-    const source = tx?.source;
-    const payload = source?.invoice_payload;
-    if (source?.type !== "user" || typeof payload !== "string" || !payload.startsWith("frame:")) continue;
-
-    const parts = payload.split(":");
-    const userId = Number(parts[1]);
-    const pack = PACKS[parts[2]];
-    const sourceUserId = Number(source.user?.id);
-
-    if (
-      parts.length !== 4 ||
-      !Number.isSafeInteger(userId) ||
-      userId <= 0 ||
-      sourceUserId !== userId ||
-      (targetUserId !== null && userId !== Number(targetUserId)) ||
-      !pack ||
-      Number(tx.amount) !== pack.stars ||
-      !tx.id
-    ) continue;
-
-    found += 1;
-    const result = await creditStarsPayment({
-      userId,
-      username: source.user?.username || null,
-      firstName: source.user?.first_name || "",
-      chargeId: String(tx.id),
-      providerChargeId: null,
-      pack: { ...pack, key: parts[2] },
-      source: "stars_history"
-    });
-
-    if (result.credited) {
-      credited += 1;
-      creditedCrystals += pack.crystals;
-      if (notifyUsers) {
-        try {
-          await bot.telegram.sendMessage(
-            userId,
-            `💎 Оплату ${pack.stars} ⭐ нашёл в истории Telegram. Начислено ${pack.crystals} кристаллов. Текущий баланс: ${result.balance} 💎`
-          );
-        } catch (notifyError) {
-          console.error("FRAME PAYMENT RECOVERY NOTIFICATION ERROR", {
-            userId, chargeId: tx.id, error: notifyError.message
-          });
-        }
-      }
-    }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || `Источник котировок ответил кодом ${response.status}`);
+    error.status = response.status === 429 ? 429 : response.status >= 500 ? 502 : 503;
+    throw error;
   }
-
-  return { scanned: transactions.length, found, credited, creditedCrystals };
+  return data;
 }
 
-/* Диагностика каждого подтверждённого платёжного Update */
-bot.use(async (ctx, next) => {
-  if (ctx.message?.successful_payment) {
-    const p = ctx.message.successful_payment;
-    console.log("FRAME SUCCESSFUL_PAYMENT UPDATE RECEIVED", {
-      userId: ctx.from?.id,
-      currency: p.currency,
-      total: p.total_amount,
-      payloadPresent: Boolean(p.invoice_payload),
-      chargeIdPresent: Boolean(p.telegram_payment_charge_id)
-    });
+function ema(values, period) {
+  const k = 2/(period+1);
+  let result = values[0];
+  for (let i=1;i<values.length;i++) result = values[i]*k + result*(1-k);
+  return result;
+}
+function rsi(values, period=14) {
+  let gains=0, losses=0;
+  for(let i=values.length-period;i<values.length;i++){
+    const delta=values[i]-values[i-1];
+    if(delta>0) gains+=delta; else losses-=delta;
   }
-  return next();
-});
-
-/* Начисление сразу после successful_payment Update */
-bot.on("message", async (ctx, next) => {
-  const payment = ctx.message?.successful_payment;
-  // Пропускаем все обычные сообщения дальше, чтобы команды /start, /app,
-  // /paysupport и остальные обработчики Telegraf продолжали работать.
-  if (!payment || !PURCHASES_ENABLED) return next();
-
-  const parts = String(payment.invoice_payload || "").split(":");
-  const userId = Number(parts[1]);
-  const pack = PACKS[parts[2]];
-
-  if (
-    parts.length !== 4 ||
-    parts[0] !== "frame" ||
-    !Number.isSafeInteger(userId) ||
-    userId !== ctx.from.id ||
-    !pack ||
-    payment.currency !== "XTR" ||
-    payment.total_amount !== pack.stars ||
-    !payment.telegram_payment_charge_id
-  ) {
-    console.error("FRAME PAYMENT REJECTED: invalid successful_payment payload", {
-      from: ctx.from?.id, payload: payment.invoice_payload,
-      currency: payment.currency, total: payment.total_amount
-    });
-    return;
+  if(losses===0) return 100;
+  const rs=(gains/period)/(losses/period);
+  return 100-(100/(1+rs));
+}
+function analyze(candles, symbol, tf, isOpen) {
+  if (!isOpen) return { direction:"none", reason:"Актив сейчас закрыт у источника котировок." };
+  if (!Array.isArray(candles) || candles.length < 35) return { direction:"none", reason:"Недостаточно свечей для анализа." };
+  const bars = candles.slice().sort((a,b)=>Number(a.time)-Number(b.time));
+  const last = bars[bars.length-1];
+  const now = Math.floor(Date.now()/1000);
+  if (!last || !Number.isFinite(Number(last.close)) || now-Number(last.time) > Math.max(180,tf*3)) {
+    return { direction:"none", reason:"Котировки устарели. Дождись обновления данных." };
   }
-
-  try {
-    const result = await creditStarsPayment({
-      userId,
-      username: ctx.from.username || null,
-      firstName: ctx.from.first_name || "",
-      chargeId: payment.telegram_payment_charge_id,
-      providerChargeId: payment.provider_payment_charge_id || null,
-      pack: { ...pack, key: parts[2] },
-      source: "successful_payment_update"
-    });
-
-    if (result.credited) {
-      await ctx.reply(
-        `✨ Оплата прошла успешно!\n\n💎 Начислено: ${pack.crystals} кристаллов.\nБаланс обновлён: ${result.balance} 💎`
-      );
-    } else {
-      await ctx.reply(`Этот платёж уже обработан. Текущий баланс: ${result.balance} 💎`);
-    }
-  } catch (error) {
-    console.error("FRAME PAYMENT CREDIT ERROR", {
-      userId, chargeId: payment.telegram_payment_charge_id,
-      error: error.stack || error.message
-    });
-    try {
-      await ctx.reply("Платёж подтверждён Telegram, но начисление задерживается. FRAME автоматически повторит сверку — повторно платить не нужно.");
-    } catch (replyError) {
-      console.error("Could not notify user about payment issue:", replyError.message);
-    }
+  let gaps=0;
+  for(let i=1;i<bars.length;i++){
+    const delta=Number(bars[i].time)-Number(bars[i-1].time);
+    if(delta>tf*1.5) gaps += Math.max(1,Math.round(delta/tf)-1);
   }
-});
-
-/* Ручная проверка + немедленная сверка пропущенных Stars-платежей */
-bot.command("paysupport", async (ctx) => {
-  const userId = ctx.from?.id;
-  if (!userId) return;
-  await ctx.reply("🔎 Проверяю подтверждённые платежи Telegram Stars…");
-  try {
-    const result = await reconcileStarsPayments(userId, false);
-    const balance = await pool.query(
-      "SELECT crystals FROM users WHERE telegram_id=$1", [userId]
-    );
-    const crystals = balance.rows[0]?.crystals ?? 0;
-
-    if (result.credited > 0) {
-      await ctx.reply(`✅ Нашёл оплату и начислил ${result.creditedCrystals} кристаллов. Текущий баланс: ${crystals} 💎`);
-    } else if (result.found > 0) {
-      await ctx.reply(`Платёж найден, но уже был учтён ранее. Текущий баланс: ${crystals} 💎`);
-    } else {
-      await ctx.reply(`В последних ${result.scanned} транзакциях не нашёл неоплаченный счёт FRAME для твоего аккаунта. Баланс: ${crystals} 💎. Повторно платить не нужно.`);
-    }
-  } catch (error) {
-    console.error("FRAME PAY SUPPORT ERROR", {
-      userId, error: error.stack || error.message
-    });
-    await ctx.reply("Не удалось проверить историю Stars сейчас. Повторно не плати — автоматическая сверка продолжит работу.");
-  }
-});
-
-/* Автоматическая сверка защищает от потерянных Telegram Updates и временных ошибок БД */
-let starsReconciliationRunning = false;
-async function runStarsReconciliation() {
-  if (starsReconciliationRunning) return;
-  starsReconciliationRunning = true;
-  try {
-    const result = await reconcileStarsPayments(null, true);
-    if (result.credited > 0) console.log("FRAME AUTOMATIC STARS RECONCILIATION", result);
-  } catch (error) {
-    console.error("FRAME AUTOMATIC STARS RECONCILIATION ERROR", error.stack || error.message);
-  } finally {
-    starsReconciliationRunning = false;
-  }
+  if(gaps>0) return { direction:"none", reason:"В истории свечей обнаружены пропуски. Сигнал отключён." };
+  const closes=bars.map(x=>Number(x.close));
+  if(closes.some(x=>!Number.isFinite(x))) return { direction:"none", reason:"Источник вернул некорректные цены." };
+  const fast=ema(closes.slice(-30),9), slow=ema(closes.slice(-30),21);
+  const momentum=closes.at(-1)-closes.at(-6);
+  const strength=Math.abs(fast-slow)/Math.max(Math.abs(slow),1e-9);
+  const oscillator=rsi(closes,14);
+  let up=0,down=0;
+  if(fast>slow) up+=2; else if(fast<slow) down+=2;
+  if(momentum>0) up++; else if(momentum<0) down++;
+  if(oscillator>=52 && oscillator<=68) up++;
+  if(oscillator<=48 && oscillator>=32) down++;
+  if(oscillator>75 || oscillator<25) return { direction:"none", reason:"Рынок в зоне сильного перекупленного/перепроданного движения — лучше пропустить." };
+  if(Math.abs(up-down)<2 || strength<0.000015) return { direction:"none", reason:"Направление недостаточно выражено." };
+  const direction=up>down?"up":"down";
+  const score=Math.min(84, 56+Math.abs(up-down)*7+Math.min(10,strength*100000));
+  return {
+    direction, confidence:Math.round(score), symbol, timeframe:tf,
+    expiry:tf, rsi:Number(oscillator.toFixed(1)),
+    indicators:{emaFast:Number(fast.toPrecision(7)),emaSlow:Number(slow.toPrecision(7)),momentum:Number(momentum.toPrecision(7))},
+    candleTime:Number(last.time), generatedAt:Date.now(),
+    reason:direction==="up"?"Краткосрочный импульс и EMA указывают вверх.":"Краткосрочный импульс и EMA указывают вниз.",
+    disclaimer:"Это аналитическая оценка, а не гарантия результата и не финансовая рекомендация."
+  };
 }
 
-/* Команды Telegram */
-
-bot.start(async (ctx) => {
-  await ctx.reply(
-    "✨ Добро пожаловать в FRAME!\n\nТвой магазин готовых промптов.\n\n💎 Открывай идеи, сохраняй любимые и создавай истории!",
-    Markup.inlineKeyboard([
-      [
-        Markup.button.webApp(
-          "✨ Открыть FRAME",
-          MINI_APP_URL
-        )
-      ]
-    ])
-  );
-});
-
-bot.command("app", async (ctx) => {
-  await ctx.reply(
-    "Открывай магазин FRAME:",
-    Markup.inlineKeyboard([
-      [
-        Markup.button.webApp(
-          "✨ Открыть магазин",
-          MINI_APP_URL
-        )
-      ]
-    ])
-  );
-});
-
-/* Обработка ошибок */
-
-app.use((error, req, res, next) => {
-  console.error("Server error:", error);
-
-  if (res.headersSent) return next(error);
-
-  res.status(500).json({
-    error: "Внутренняя ошибка сервера"
-  });
-});
-
-/* Запуск */
-
-async function startBotWithRetry() {
-  let attempt = 0;
-
-  while (true) {
-    try {
-      await bot.launch({ allowedUpdates: ["message", "pre_checkout_query"] });
-      console.log("FRAME Telegram bot started (message + pre_checkout_query updates enabled)");
-      void runStarsReconciliation();
-      const reconciliationTimer = setInterval(() => void runStarsReconciliation(), 30000);
-      if (typeof reconciliationTimer.unref === "function") reconciliationTimer.unref();
-      return;
-    } catch (error) {
-      attempt += 1;
-      const delay = Math.min(30000, 5000 * attempt);
-      console.error(
-        `Telegram API connection failed (attempt ${attempt}). Retrying in ${delay / 1000}s:`,
-        error.message
-      );
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-}
-
-async function main() {
-  validatePrompts();
-  await initDatabase();
-
-  // Постоянная кнопка Mini App в меню чата Telegram
+app.get("/health", (_req,res)=>res.json({ok:true,status:"ok",service:"SIGNAL AI",marketDataConfigured:Boolean(OTCHARTS_API_KEY)}));
+app.get("/", (_req,res)=>res.sendFile(path.join(__dirname,"index.html")));
+app.get("/api/status", authenticate, (_req,res)=>res.json({
+  service:"SIGNAL AI", marketDataConfigured:Boolean(OTCHARTS_API_KEY),
+  source:"OTCharts · read-only", supportedTimeframes:[60,300,900]
+}));
+app.get("/api/symbols", authenticate, async (req,res,next)=>{
   try {
-    await bot.telegram.callApi("setChatMenuButton", {
-      menu_button: {
-        type: "web_app",
-        text: "Открыть FRAME",
-        web_app: { url: MINI_APP_URL }
-      }
-    });
-    console.log("FRAME chat menu button configured");
-  } catch (error) {
-    console.error("Could not configure FRAME chat menu button:", error.message);
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`FRAME server started on port ${PORT}`);
-  });
-
-  startBotWithRetry().catch(error => {
-    console.error("Telegram retry loop failed:", error);
-  });
-}
-
-main().catch(error => {
-  console.error("FRAME startup error:", error);
-  process.exit(1);
+    const venue=req.query.venue==="forex"?"forex":"otc";
+    const key="symbols:"+venue, cached=cache.get(key);
+    if(cached && Date.now()-cached.at<CACHE_MS) return res.json(cached.data);
+    const data=await otcRequest("/v1/symbols",{venue});
+    const symbols=(data.symbols||[]).filter(s=>ALLOWED_SYMBOLS.has(s.symbol));
+    const result={venue,symbols};
+    cache.set(key,{at:Date.now(),data:result});
+    res.json(result);
+  } catch(e){next(e);}
+});
+app.get("/api/signal", authenticate, async (req,res,next)=>{
+  try {
+    const symbol=String(req.query.symbol||"EURUSD_otc");
+    const timeframe=Number(req.query.timeframe||60);
+    const venue=symbol.endsWith("_otc")?"otc":"forex";
+    if(!ALLOWED_SYMBOLS.has(symbol)) return res.status(400).json({error:"Неизвестный актив."});
+    if(!TIMEFRAMES.has(timeframe)) return res.status(400).json({error:"Этот таймфрейм пока не поддерживается."});
+    const key=`candles:${venue}:${symbol}:${timeframe}`, cached=cache.get(key);
+    let data;
+    if(cached && Date.now()-cached.at<CACHE_MS) data=cached.data;
+    else {
+      data=await otcRequest("/v1/candles",{venue,symbol,tf:timeframe,limit:80});
+      cache.set(key,{at:Date.now(),data});
+    }
+    const symbolsKey="symbols:"+venue;
+    let catalogue=cache.get(symbolsKey)?.data;
+    if(!catalogue || Date.now()-cache.get(symbolsKey).at>60000){
+      catalogue=await otcRequest("/v1/symbols",{venue});
+      cache.set(symbolsKey,{at:Date.now(),data:catalogue});
+    }
+    const instrument=(catalogue.symbols||[]).find(x=>x.symbol===symbol);
+    const result=analyze(data.candles,symbol,timeframe,instrument?.open!==false && Boolean(instrument));
+    res.json({...result, symbolName:instrument?.name||symbol, isOpen:instrument?.open??null,
+      payout:instrument?.payout??null, source:"OTCharts", candleCount:data.candles?.length||0,
+      gaps:data.gaps||null});
+  } catch(e){next(e);}
 });
 
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+bot.start(ctx=>ctx.reply(
+  "📡 SIGNAL AI\n\nАналитика рынка Pocket Option. Выбери актив и получи оценку направления UP / DOWN. Сигналы не гарантируют прибыль.",
+  Markup.inlineKeyboard([[Markup.button.webApp("Открыть SIGNAL AI",MINI_APP_URL)]])
+));
+bot.command("app",ctx=>ctx.reply("Открыть SIGNAL AI:",Markup.inlineKeyboard([[Markup.button.webApp("Запустить приложение",MINI_APP_URL)]])));
+
+app.use((err,_req,res,_next)=>{
+  console.error("SIGNAL AI error:",err.message);
+  res.status(err.status||500).json({error:err.status===429?"Лимит запросов к источнику исчерпан.":err.status===502?"Источник котировок временно недоступен.":err.status===503?err.message:"Внутренняя ошибка сервера."});
+});
+async function main(){
+  app.listen(PORT,"0.0.0.0",()=>console.log(`SIGNAL AI listening on ${PORT}`));
+  await bot.launch({dropPendingUpdates:true});
+  console.log("SIGNAL AI Telegram bot started");
+}
+main().catch(err=>{console.error("Startup failed:",err);process.exit(1);});
+process.once("SIGINT",()=>bot.stop("SIGINT"));
+process.once("SIGTERM",()=>bot.stop("SIGTERM"));
